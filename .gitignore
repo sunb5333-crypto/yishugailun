@@ -1,0 +1,7 @@
+*.doc
+*.docx
+*.pdf
+*.json.bak
+.env
+.wrangler/
+node_modules/

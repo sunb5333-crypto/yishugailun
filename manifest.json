@@ -1,0 +1,10 @@
+{
+  "name": "复习航线 · 00504艺术概论",
+  "short_name": "复习航线",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f2e9",
+  "theme_color": "#102331",
+  "lang": "zh-CN",
+  "description": "面向00504艺术概论自考的个人复习工具"
+}

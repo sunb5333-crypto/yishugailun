@@ -1,0 +1,16 @@
+{
+  "examDate": "2026-10-22",
+  "startDate": "2026-07-27",
+  "totalDays": 88,
+  "learningDays": 60,
+  "reviewDays": 28,
+  "stages": [
+    {"name":"基础理论","fromDay":1,"toDay":14,"chapters":["艺术本质与功能","艺术创作与鉴赏"]},
+    {"name":"建筑艺术专题","fromDay":15,"toDay":39,"chapters":["建筑艺术专题","园林与宫殿"]},
+    {"name":"宗教与现代建筑","fromDay":40,"toDay":49,"chapters":["宗教与现代建筑"]},
+    {"name":"首轮整合","fromDay":50,"toDay":60,"chapters":["全部章节","错题与薄弱点"]},
+    {"name":"循环复习","fromDay":61,"toDay":81,"chapters":["按遗忘曲线复习","高频案例","主观题答题框架"]},
+    {"name":"模拟与考前","fromDay":82,"toDay":88,"chapters":["综合模拟","错题回顾","考前轻复习"]}
+  ],
+  "dailyTaskTypes": ["新知识卡片","到期复习","客观题练习","主观题提纲"]
+}

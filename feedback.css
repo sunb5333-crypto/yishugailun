@@ -1,0 +1,112 @@
+.quiz-option.correct::after,
+.quiz-option.wrong::after {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font: 800 20px/1 Manrope, system-ui, sans-serif;
+}
+
+.quiz-option.correct::after {
+  content: "✓";
+  background: #25865f;
+  box-shadow: 0 0 0 5px rgba(37, 134, 95, .12);
+}
+
+.quiz-option.wrong::after {
+  content: "×";
+  background: #d84f43;
+  box-shadow: 0 0 0 5px rgba(216, 79, 67, .12);
+}
+
+.feedback > strong {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+}
+
+.feedback > strong::before {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font: 800 22px/1 Manrope, system-ui, sans-serif;
+}
+
+.feedback.good > strong {
+  color: #236f52;
+}
+
+.feedback.good > strong::before {
+  content: "✓";
+  background: #25865f;
+}
+
+.feedback.bad > strong {
+  color: #b73d34;
+}
+
+.feedback.bad > strong::before {
+  content: "×";
+  background: #d84f43;
+}
+
+@media (max-width: 800px) {
+  .quiz-option.correct::after,
+  .quiz-option.wrong::after {
+    width: 27px;
+    height: 27px;
+    flex-basis: 27px;
+    font-size: 18px;
+  }
+}
+
+.memorize-workspace {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px dashed #c7d3cd;
+  border-radius: 14px;
+  background: #fbfdf9;
+}
+
+.answer-toggle {
+  justify-self: start;
+  border: 1px solid #367a61;
+  border-radius: 9px;
+  background: #fff;
+  color: #236f52;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.memo-answer { margin-top: 0; }
+.memo-label { color: #485a61; font-size: 13px; font-weight: 800; }
+
+.memo-draft {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  padding: 14px;
+  border: 1px solid #b8c7bf;
+  border-radius: 10px;
+  background: #fff;
+  color: #102331;
+  font: 14px/1.8 Manrope, system-ui, sans-serif;
+  outline: none;
+}
+
+.memo-draft:focus {
+  border-color: #367a61;
+  box-shadow: 0 0 0 4px rgba(54, 122, 97, .12);
+}
+
+.memo-saved { margin: 0; color: #236f52; font-size: 12px; font-weight: 800; }

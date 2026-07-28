@@ -1,0 +1,7 @@
+name = "yishugailun-sync"
+main = "sync-worker.js"
+compatibility_date = "2026-07-28"
+
+[[kv_namespaces]]
+binding = "SYNC_STATE"
+id = "c5384a727bfd46d780626344373fdef7"

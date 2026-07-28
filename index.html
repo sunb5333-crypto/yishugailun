@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#102331">
+  <title>复习航线 · 88天冲刺</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="feedback.css?v=2">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">✦</span><span>复习航线</span></div>
+      <p class="brand-note">把88天，变成每天的一小步。</p>
+      <nav class="nav" aria-label="主导航">
+        <button class="nav-item active" data-view="home"><span>⌂</span> 今日航线</button>
+        <button class="nav-item" data-view="course"><span>◈</span> 课程地图</button>
+        <button class="nav-item" data-view="review"><span>↻</span> 间隔复习</button>
+        <button class="nav-item" data-view="mistakes"><span>◇</span> 错题仓库</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="streak-tile"><div class="flame">♨</div><div><strong id="streakSide">0 天</strong><span>连续学习</span></div></div>
+        <button class="nav-item settings" data-view="settings"><span>⚙</span> 课程设置</button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark">✦</span> 复习航线</div>
+        <div class="top-actions"><span class="sync-dot"></span><span class="sync-label">自动保存到本地</span><div class="avatar">Z</div></div>
+      </header>
+      <div id="appContent"></div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+<script src="app.js?v=8"></script>
+</body>
+</html>
