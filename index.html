@@ -8,8 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 <link rel="stylesheet" href="feedback.css?v=2">
+<link rel="stylesheet" href="navigation.css?v=1">
 </head>
 <body>
   <div class="app-shell">
@@ -29,13 +30,25 @@
     </aside>
     <main class="main">
       <header class="topbar">
+        <button class="mobile-back" id="mobileBack" type="button" onclick="goBack()" aria-label="返回上一页">←</button>
         <div class="mobile-brand"><span class="brand-mark">✦</span> 复习航线</div>
-        <div class="top-actions"><span class="sync-dot"></span><span class="sync-label">自动保存到本地</span><div class="avatar">Z</div></div>
+        <div class="top-actions">
+          <span class="sync-dot"></span><span class="sync-label">自动保存到本地</span>
+          <button class="mobile-settings" type="button" data-view="settings" aria-label="打开设置">⚙</button>
+          <div class="avatar">Z</div>
+        </div>
       </header>
       <div id="appContent"></div>
     </main>
   </div>
+  <nav class="mobile-nav" aria-label="手机端主导航">
+    <button class="mobile-nav-item active" data-view="home"><span>⌂</span>首页</button>
+    <button class="mobile-nav-item" data-view="course"><span>◈</span>课程</button>
+    <button class="mobile-nav-item" data-view="practice"><span>✎</span>刷题</button>
+    <button class="mobile-nav-item" data-view="mistakes"><span>◇</span>错题</button>
+    <button class="mobile-nav-item" data-view="settings"><span>⚙</span>设置</button>
+  </nav>
   <div class="toast" id="toast" role="status"></div>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
