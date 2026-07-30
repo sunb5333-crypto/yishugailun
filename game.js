@@ -1,5 +1,5 @@
 /* 每日答题闯关：完成17题后解锁。使用原创DOM/CSS角色，不依赖第三方游戏素材。 */
-const GAME_VERSION=3;
+const GAME_VERSION=4;
 const GAME_WORLD_WIDTH=3600;
 const QUESTION_BLOCK_COUNT=12;
 const FINAL_BOSS_HP=5;
