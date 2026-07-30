@@ -141,6 +141,13 @@ function ensureDailyTask(){
   const date=localDateString();
   const current=state.dailyLesson;
   if(!current||current.version!==PRACTICE_VERSION||current.date!==date){
+    if(!current&&Array.isArray(state.dailyTask)&&state.dailyTask.length&&!state.legacyPracticeBackup){
+      state.legacyPracticeBackup={
+        savedAt:new Date().toISOString(),dailyDate:state.dailyDate,dailyTask:[...state.dailyTask],
+        dailyIndex:state.dailyIndex,dailyAnswers:JSON.parse(JSON.stringify(state.dailyAnswers||{})),
+        dailyDone:Boolean(state.dailyDone)
+      };
+    }
     const legacyDone=state.dailyDate===date&&state.dailyDone;
     archivePreviousLesson();
     state.dailyLesson=createDailyLesson(date);
