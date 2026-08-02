@@ -1,5 +1,5 @@
 /* Phaser 3 横版博物馆关卡。游戏帧循环不触发DOM重绘。 */
-const PHASER_GAME_VERSION=1;
+const PHASER_GAME_VERSION=2;
 const WORLD_WIDTH=5200;
 const MODEL_CROPS={
   hero:{x:28,y:255,w:220,h:320},paint:{x:238,y:330,w:225,h:240},frame:{x:450,y:295,w:250,h:280},
@@ -31,7 +31,8 @@ function freshPhaserState(){
     checkpointX:120,score:0,shots:0,audio:true,battle:null,completedAt:null};
 }
 function normalizePhaserState(){
-  if(!state.phaserGame||state.phaserGame.version!==PHASER_GAME_VERSION||state.phaserGame.date!==gameDate())state.phaserGame=freshPhaserState();
+  if(!state.phaserGame||state.phaserGame.date!==gameDate())state.phaserGame=freshPhaserState();
+  else if(state.phaserGame.version!==PHASER_GAME_VERSION)state.phaserGame={...state.phaserGame,version:PHASER_GAME_VERSION};
   return state.phaserGame;
 }
 function getDailyItem(id){return ensureDailyTask().items.find(x=>x.id===id)}
@@ -68,10 +69,20 @@ function phaserGameView(){
 function requestMuseumFullscreen(){const shell=document.querySelector('.phaser-shell');if(shell?.requestFullscreen)shell.requestFullscreen().catch(()=>notify('当前浏览器不允许自动全屏'))}
 function toggleGameAudio(){const g=normalizePhaserState();g.audio=!g.audio;if(g.audio&&phaserInstance)startMuseumMusic();else stopMuseumMusic();save();const buttons=[...document.querySelectorAll('.museum-hud button')];const button=buttons.find(x=>x.textContent.startsWith('音乐'));if(button)button.textContent=`音乐/音效 ${g.audio?'开':'关'}`}
 function destroyPhaser(){stopMuseumMusic();if(phaserInstance){phaserInstance.destroy(true);phaserInstance=null;levelScene=null}}
+function ensureModelTexture(scene,key){
+  const crop=MODEL_CROPS[key],textureKey=`model-${key}`;
+  if(scene.textures.exists(textureKey))return textureKey;
+  const source=scene.textures.get('lineup').getSourceImage();
+  const canvasTexture=scene.textures.createCanvas(textureKey,crop.w,crop.h);
+  const context=canvasTexture.context;
+  context.clearRect(0,0,crop.w,crop.h);
+  context.drawImage(source,crop.x,crop.y,crop.w,crop.h,0,0,crop.w,crop.h);
+  canvasTexture.refresh();
+  return textureKey;
+}
 function createCroppedModel(scene,key,x,y,height){
-  const crop=MODEL_CROPS[key],texture=scene.textures.get('lineup'),frameKey=`model-${key}`;
-  if(!texture.has(frameKey))texture.add(frameKey,0,crop.x,crop.y,crop.w,crop.h);
-  const image=scene.add.image(0,-height/2,'lineup',frameKey).setDisplaySize(height*crop.w/crop.h,height);
+  const crop=MODEL_CROPS[key],textureKey=ensureModelTexture(scene,key);
+  const image=scene.add.image(0,-height/2,textureKey).setDisplaySize(height*crop.w/crop.h,height);
   const box=scene.add.container(x,y,[image]);scene.physics.add.existing(box);box.body.setSize(Math.max(28,height*.38),height*.82).setOffset(-Math.max(28,height*.38)/2,-height*.82);box.model=image;box.modelKey=key;box.modelHeight=height;return box;
 }
 function beep(freq=440,duration=.08){
@@ -150,7 +161,7 @@ function renderPhaserBattle(){
   const chunks=answerChunks(item),selected=b.selected||[],dictation=b.type==='final';
   const slots=chunks.map((_,i)=>`<button class="answer-slot" onclick="removePhaserFragment(${i})">${escapeHtml(selected[i]?.text||'第'+(i+1)+'部分')}</button>`).join('');
   const fragments=g.inventory.map(getDailyFragment).filter(Boolean).map(f=>`<button class="${selected.some(x=>x.id===f.id)?'used':''}" onclick="pickPhaserFragment('${f.id}')">${escapeHtml(f.text)}</button>`).join('');
-  host.innerHTML=`<div class="phaser-battle"><div class="battle-window"><div class="battle-top"><div class="battle-portrait hero"></div><div class="battle-question"><small>${escapeHtml(item.chapter)} · ${item.orderPolicy==='free'?'顺序不限':'按语意顺序'}</small><h2>${escapeHtml(item.q)}</h2><div>敌人生命 ${'◆'.repeat(b.hp)}</div></div><div class="battle-portrait enemy"></div></div>
+  host.innerHTML=`<div class="phaser-battle"><div class="battle-window"><div class="battle-top"><div class="battle-portrait hero"></div><div class="battle-question"><small>${escapeHtml(item.chapter)} · ${answerOrderPolicy(item)==='free'?'顺序不限':'按语意顺序'}</small><h2>${escapeHtml(item.q)}</h2><div>敌人生命 ${'◆'.repeat(b.hp)}</div></div><div class="battle-portrait enemy"></div></div>
   ${dictation?`<textarea id="phaserDictation" class="dictation-box" placeholder="写出完整意思，不要求逐字相同。"></textarea>`:`<div class="answer-slots">${slots}</div><div class="answer-fragments">${fragments}</div>`}
   <div class="battle-feedback ${b.feedback?.correct?'good':'bad'}">${escapeHtml(b.feedback?.message||'')}</div><div class="battle-actions"><button onclick="retreatPhaserBattle()">暂时撤退</button><button onclick="usePhaserHint()">提示 ${g.hints}</button>${new URLSearchParams(location.search).has('test')?'<button onclick="testFillBattle()">测试填入正确答案</button>':''}<button class="attack" onclick="submitPhaserAttack()">提交攻击</button></div></div></div>`;
 }
@@ -161,7 +172,7 @@ function submitPhaserAttack(){
   const g=normalizePhaserState(),b=g.battle,item=currentPhaserBattleItem(),expected=answerChunks(item);if(!b||!item)return;
   let correct=false;
   if(b.type==='final'){const draft=document.getElementById('phaserDictation')?.value||'',normalizedDraft=normalizedMeaning(draft),normalizedAnswer=normalizedMeaning(item.answerText),tokens=String(item.keywords||'').split(/[｜|、，；]/).filter(x=>x.length>1);correct=normalizedDraft===normalizedAnswer||(normalizedDraft.length>=8&&(tokens.length?tokens.filter(x=>normalizedDraft.includes(normalizedMeaning(x))).length>=Math.min(2,tokens.length):normalizedDraft.length>=normalizedAnswer.length*.45))}
-  else{const got=b.selected.map(x=>x.text);correct=got.length===expected.length&&(item.orderPolicy==='free'?[...got].sort().join('|')===[...expected].sort().join('|'):got.every((x,i)=>x===expected[i]))}
+  else{const got=b.selected.map(x=>x.text);correct=maskAnswerCorrect(item,got,expected)}
   if(correct){b.hp--;b.feedback={correct:true,message:'✓ 答案成立，攻击命中'};beep(1050);if(b.hp<=0){finishPhaserEnemy(b.enemyId,b.type);return}b.index=Math.min(b.index+1,b.questionIds.length-1);b.selected=[]}
   else{b.feedback={correct:false,message:'× 意思或结构不完整，敌人反击'};beep(130,.2);if(g.shield)g.shield=false;else g.hearts--;if(g.hearts<=0){g.battle=null;showGameResult(false);return}}
   save();renderPhaserBattle();updateMuseumHud()

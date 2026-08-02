@@ -1,10 +1,43 @@
 /* 三轮掩码练习：每天10个不同知识点，7道章节题加3道复习题。 */
-const PRACTICE_VERSION=3;
+const PRACTICE_VERSION=4;
 const COURSE_START_DATE='2026-07-27';
 const DAILY_LESSON_SIZE=10;
 const PRACTICE_ROUNDS=3;
 const DAILY_CURRENT_COUNT=7;
-const FREE_ORDER_IDS=new Set(['a2','a3','a4','a7','a8','a17','f1','f2','f3','m1']);
+const FREE_ORDER_IDS=new Set(['a2','a3','a4','a5','a6','a7','a8','a13','a15','a17','f1','f2','f3','m1']);
+const FREE_ORDER_PROMPT=/(包括|哪些|哪几|分类|分为|阶段|过程|特征|功能|表现|要素|方面|核心作用|什么是艺术)/;
+
+function sourceQuestionIdOf(item){
+  return item?.sourceQuestionId||item?.knowledgePointId||String(item?.id||'').split('-')[0];
+}
+function answerOrderPolicy(item){
+  const sourceId=sourceQuestionIdOf(item),source=getQuestion(sourceId),prompt=String(source?.q||item?.q||'');
+  return FREE_ORDER_IDS.has(sourceId)||FREE_ORDER_PROMPT.test(prompt)?'free':'fixed';
+}
+function sameAnswerMultiset(selected,expected){
+  if(!Array.isArray(selected)||!Array.isArray(expected)||selected.length!==expected.length)return false;
+  const counts=new Map();
+  expected.forEach(value=>counts.set(value,(counts.get(value)||0)+1));
+  for(const value of selected){
+    const left=counts.get(value)||0;
+    if(left<=0)return false;
+    counts.set(value,left-1);
+  }
+  return true;
+}
+function maskAnswerCorrect(item,selected,expected){
+  return answerOrderPolicy(item)==='free'
+    ?sameAnswerMultiset(selected,expected)
+    :selected.length===expected.length&&selected.every((value,index)=>value===expected[index]);
+}
+function maskSelectionStatus(item,selected,expected,index){
+  const value=selected[index];
+  if(!value)return'wrong';
+  if(answerOrderPolicy(item)!=='free')return value===expected[index]?'correct':'wrong';
+  const allowed=expected.filter(x=>x===value).length;
+  const used=selected.slice(0,index+1).filter(x=>x===value).length;
+  return used<=allowed?'correct':'wrong';
+}
 
 const PRACTICE_EXAMPLES={
   a1:'例如齐白石画虾，不是把真实的虾机械照搬到纸上，而是提炼虾的形态、动作和神态，形成具有审美意味的艺术形象。这说明艺术既来自现实，又包含人的审美创造。',
@@ -106,7 +139,7 @@ function buildDailyItems(chapter,date){
     id:`${q.id}-d`,knowledgePointId:q.id,sourceQuestionId:q.id,type:'mask',chapter:q.chapter||chapter.title,
     section:q.section,q:v.prompt,answerText:v.answerText,explain:q.explain||baseAnswer(q),
     keywords:q.keywords||'',example:exampleForQuestion(q),variant:v.kind,
-    orderPolicy:FREE_ORDER_IDS.has(q.id)?'free':'fixed'
+    orderPolicy:answerOrderPolicy(q)
   })));
 }
 function archivePreviousLesson(){
@@ -154,6 +187,24 @@ function migrateLessonProgress(previous,next){
   if(previous.done){next.done=true;next.completedAt=previous.completedAt||new Date().toISOString()}
   return next;
 }
+function reconcileLessonPolicies(lesson){
+  let changed=false;
+  for(const item of lesson.items||[]){
+    const policy=answerOrderPolicy(item);
+    if(item.orderPolicy!==policy){item.orderPolicy=policy;changed=true}
+    for(let round=1;round<=PRACTICE_ROUNDS;round++){
+      const result=lesson.answers?.[`${round}:${item.id}`];
+      if(!result?.answered||!Array.isArray(result.userAnswer)||!Array.isArray(result.expected))continue;
+      const regraded=maskAnswerCorrect(item,result.userAnswer,result.expected);
+      if(regraded&&!result.correct){
+        result.correct=true;result.regradedFromOrder=true;result.regradedAt=new Date().toISOString();changed=true;
+        const joined=result.userAnswer.join('、');
+        state.mistakes=(state.mistakes||[]).filter(m=>!(m.id===item.sourceQuestionId&&m.userAnswer===joined));
+      }
+    }
+  }
+  return changed;
+}
 function ensureDailyTask(){
   const date=localDateString();
   const current=state.dailyLesson;
@@ -180,11 +231,13 @@ function ensureDailyTask(){
     }
   }
   const lesson=state.dailyLesson;
+  const reconciled=reconcileLessonPolicies(lesson);
   state.dailyDate=lesson.date;
   state.dailyTask=lesson.items.map(x=>x.id);
   state.dailyIndex=lesson.index;
   state.dailyAnswers=lesson.answers;
   state.dailyDone=Boolean(lesson.done);
+  if(reconciled)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
   return lesson;
 }
 function getDailyLessonItem(id){
@@ -195,7 +248,7 @@ function dailyItemFromQuestion(q,chapterTitle=ensureDailyTask().chapterTitle){
   return{id:`${q.id}-d`,knowledgePointId:q.id,sourceQuestionId:q.id,type:'mask',chapter:q.chapter||chapterTitle,
     section:q.section,q:variant.prompt,answerText:variant.answerText,explain:q.explain||baseAnswer(q),
     keywords:q.keywords||'',example:exampleForQuestion(q),variant:variant.kind,
-    orderPolicy:FREE_ORDER_IDS.has(q.id)?'free':'fixed'};
+    orderPolicy:answerOrderPolicy(q)};
 }
 function currentDailyItem(){
   const lesson=ensureDailyTask(),order=lesson.orders[lesson.round]||lesson.orders[1];
@@ -284,9 +337,8 @@ function submitMaskAnswer(){
   const lesson=ensureDailyTask(),item=currentDailyItem(),key=answerKey(item.id),plan=maskPlan(item,lesson.round),selected=selectedForCurrent();
   if(selected.length!==plan.ranges.length){notify(`请先填满${plan.ranges.length}个空`);return}
   const expected=plan.ranges.map(x=>x.text);
-  const correct=item.orderPolicy==='free'
-    ?[...selected].sort().join('|')===[...expected].sort().join('|')
-    :selected.every((value,index)=>value===expected[index]);
+  item.orderPolicy=answerOrderPolicy(item);
+  const correct=maskAnswerCorrect(item,selected,expected);
   lesson.answers[key]={answered:true,correct,userAnswer:[...selected],expected,submittedAt:new Date().toISOString()};
   if(lesson.retryBackups)delete lesson.retryBackups[key];
   if(correct){state.xp+=10+lesson.round*5;markCorrect(getQuestion(item.sourceQuestionId)||item)}
@@ -332,7 +384,7 @@ function maskedSentence(item,plan,selected,result){
   plan.ranges.forEach((range,index)=>{
     parts.push(escapeHtml(chars.slice(cursor,range.start).join('')));
     const value=selected[index]||'';
-    const status=result?(value===range.text?'correct':'wrong'):(value?'filled':'');
+    const status=result?maskSelectionStatus(item,selected,plan.ranges.map(x=>x.text),index):(value?'filled':'');
     parts.push(`<button class="mask-slot ${status}" onclick="clearMaskSlot(${index})" ${result?'disabled':''}><small>${index+1}</small>${value?escapeHtml(value):'选择内容'}</button>`);
     cursor=range.end;
   });
@@ -374,7 +426,7 @@ function practice(){
         <div class="question-number"><span>${String(index).padStart(2,'0')}</span><small>本轮遮住 ${round+1} 个部分</small></div>
         <h2>${escapeHtml(item.q)}</h2>
         <div class="masked-statement">${maskedSentence(item,plan,selected,result)}</div>
-        <div class="option-label">从相似选项中选择 · ${item.orderPolicy==='free'?'本题顺序不限':'本题按语意顺序作答'}</div>
+        <div class="option-label">从相似选项中选择 · ${answerOrderPolicy(item)==='free'?'并列答案顺序不限，选对词即可':'本题按语意顺序作答'}</div>
         <div class="mask-options">${options}</div>
         <div class="practice-v2-actions">
           <button class="text-btn" onclick="previousQuestion()" ${lesson.index===0?'disabled':''}>← 上一题</button>

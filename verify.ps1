@@ -22,6 +22,8 @@ if($js -notmatch "type:'choice'" -or $js -notmatch "type:'fill'" -or $js -notmat
 if($js -notmatch 'examDate' -or $js -notmatch 'daysLeft'){throw 'Missing exam countdown engine'}
 if($js -notmatch 'saveSyncKeyFromInput' -or $js -notmatch 'pullRemoteState' -or $js -notmatch 'pushRemoteState'){throw 'Missing cloud sync controls'}
 if($game -notmatch 'PHASER_GAME_VERSION' -or $game -notmatch 'WORLD_WIDTH=5200'){throw 'Missing Phaser museum game'}
+if($practice -notmatch 'sameAnswerMultiset' -or $practice -notmatch 'maskSelectionStatus'){throw 'Missing unordered answer grading'}
+if($game -notmatch 'ensureModelTexture' -or $game -notmatch 'createCanvas'){throw 'Missing safe model texture rendering'}
 if($game -notmatch "hearts:5" -or $game -notmatch 'i<10'){throw 'Missing five hearts or ten question blocks'}
 if($game -notmatch "inventory:initial" -or $game -notmatch "slice\(0,10\)"){throw 'Initial fragment count is not ten'}
 if($practice -notmatch 'PRACTICE_ROUNDS=3' -or $practice -notmatch 'DAILY_LESSON_SIZE=10' -or $practice -notmatch 'DAILY_CURRENT_COUNT=7'){throw 'Missing 7+3 three-round daily practice'}
