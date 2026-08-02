@@ -3,4 +3,5 @@
 @media(prefers-reduced-motion:reduce){.phaser-shell *{scroll-behavior:auto!important}}
 .battle-portrait.hero{background-size:1500px 500px;background-position:-18px -176px}
 .battle-portrait.enemy{background-size:1086px 362px;background-position:-662px -54px}
-.museum-test-panel{position:absolute;z-index:19;left:18px;top:70px;display:flex;gap:5px;flex-wrap:wrap;max-width:480px}.museum-test-panel button{border:1px solid #71df9e;background:rgba(7,19,31,.88);color:#71df9e;border-radius:7px;padding:5px 7px;font-size:11px}
+.museum-hud .test-mode-badge{color:#07131f;background:#71df9e;border-color:#71df9e;letter-spacing:.04em}.museum-test-panel{position:absolute;z-index:19;left:18px;top:70px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;max-width:560px;padding:7px 9px;border:1px solid rgba(113,223,158,.52);border-radius:10px;background:rgba(7,19,31,.84);backdrop-filter:blur(8px)}.museum-test-panel span{padding:0 5px;color:#a8dfc3;font:800 11px Manrope;letter-spacing:.08em}.museum-test-panel button{border:1px solid #71df9e;background:#102b42;color:#71df9e;border-radius:7px;padding:5px 7px;font-size:11px}.museum-test-panel button:focus-visible{outline:3px solid #70e5ff;outline-offset:2px}
+@media(max-width:900px){.museum-hud .test-mode-badge{display:none}.museum-test-panel{top:64px;right:18px;max-width:none}.museum-test-panel span{display:none}}

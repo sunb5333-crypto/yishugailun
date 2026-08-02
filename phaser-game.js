@@ -1,14 +1,16 @@
 /* Phaser 3 横版博物馆关卡。游戏帧循环不触发DOM重绘。 */
-const PHASER_GAME_VERSION=2;
+const PHASER_GAME_VERSION=3;
 const WORLD_WIDTH=5200;
 const MODEL_CROPS={
   hero:{x:28,y:255,w:220,h:320},paint:{x:238,y:330,w:225,h:240},frame:{x:450,y:295,w:250,h:280},
   statue:{x:700,y:270,w:195,h:305},guard:{x:880,y:160,w:225,h:420},collector:{x:1080,y:195,w:285,h:385},
   curator:{x:1325,y:125,w:295,h:455},gate:{x:1580,y:135,w:340,h:445},final:{x:1890,y:145,w:280,h:440}
 };
-let phaserInstance=null,levelScene=null,museumMusicTimer=null,phaserInput={left:false,right:false,jump:false,shoot:false};
+let phaserInstance=null,levelScene=null,museumMusicTimer=null,testPhaserState=null,phaserInput={left:false,right:false,jump:false,shoot:false};
+function isGameTestMode(){return new URLSearchParams(location.search).has('game-test')}
+function persistPhaserState(){if(!isGameTestMode())save()}
 function gameDate(){return state.dailyDate||today()}
-function dailyGameUnlocked(){return Boolean(ensureDailyTask().done)}
+function dailyGameUnlocked(){return isGameTestMode()||Boolean(ensureDailyTask().done)}
 function answerChunks(item){
   const text=String(item.answerText||'').replace(/\s+/g,'');
   let chunks=text.split(/(?<=[，；。])/).map(x=>x.trim()).filter(x=>x.length>1);
@@ -31,6 +33,11 @@ function freshPhaserState(){
     checkpointX:120,score:0,shots:0,audio:true,battle:null,completedAt:null};
 }
 function normalizePhaserState(){
+  if(isGameTestMode()){
+    if(!testPhaserState||testPhaserState.date!==gameDate())testPhaserState=freshPhaserState();
+    else if(testPhaserState.version!==PHASER_GAME_VERSION)testPhaserState={...testPhaserState,version:PHASER_GAME_VERSION};
+    return testPhaserState;
+  }
   if(!state.phaserGame||state.phaserGame.date!==gameDate())state.phaserGame=freshPhaserState();
   else if(state.phaserGame.version!==PHASER_GAME_VERSION)state.phaserGame={...state.phaserGame,version:PHASER_GAME_VERSION};
   return state.phaserGame;
@@ -55,19 +62,23 @@ function enterDailyGame(){
   if(!dailyGameUnlocked()){notify('先完成今天10题的三轮练习');return}
   state.view='phaserGame';save();render();
 }
-function exitPhaserGame(){destroyPhaser();document.body.classList.remove('phaser-mode');state.view='home';save();render()}
+function exitPhaserGame(){
+  destroyPhaser();document.body.classList.remove('phaser-mode');
+  if(isGameTestMode()){location.assign(`${location.pathname}?v=12`);return}
+  state.view='home';save();render()
+}
 function phaserGameView(){
-  const g=normalizePhaserState();
-  const testPanel=new URLSearchParams(location.search).has('test')?`<div class="museum-test-panel"><button onclick="testGameAction('reset')">测试重置</button><button onclick="testGameAction('move')">测试移动</button><button onclick="testGameAction('jump')">测试跳跃</button><button onclick="testGameAction('shoot')">测试射击</button><button onclick="testGameAction('small')">测试小怪</button><button onclick="testGameAction('block')">测试方块</button><button onclick="testGameAction('medium')">测试中怪</button><button onclick="testGameAction('boss')">测试大怪</button><button onclick="testGameAction('final')">测试终Boss</button></div>`:'';
+  const g=normalizePhaserState(),testing=isGameTestMode();
+  const testPanel=testing?`<div class="museum-test-panel"><span>测试工具</span><button onclick="testGameAction('reset')">重置</button><button onclick="testGameAction('move')">移动</button><button onclick="testGameAction('jump')">跳跃</button><button onclick="testGameAction('shoot')">射击</button><button onclick="testGameAction('small')">小怪</button><button onclick="testGameAction('block')">方块</button><button onclick="testGameAction('medium')">中怪</button><button onclick="testGameAction('boss')">大怪</button><button onclick="testGameAction('final')">终Boss</button></div>`:'';
   return`<div class="phaser-shell"><div id="phaserCanvas" class="phaser-canvas"></div>
-  <div class="museum-hud"><span class="hearts" id="phaserHearts">${'♥'.repeat(g.hearts)}</span><span>碎片 <b id="phaserFragments">${g.inventory.length}</b></span><span>提示 <b id="phaserHints">${g.hints}</b></span><span>护盾 <b id="phaserShield">${g.shield?'有':'无'}</b></span><button onclick="toggleGameAudio()">音乐/音效 ${g.audio?'开':'关'}</button><button onclick="exitPhaserGame()">退出</button></div>
+  <div class="museum-hud">${testing?'<span class="test-mode-badge">测试模式 · 不保存正式进度</span>':''}<span class="hearts" id="phaserHearts">${'♥'.repeat(g.hearts)}</span><span>碎片 <b id="phaserFragments">${g.inventory.length}</b></span><span>提示 <b id="phaserHints">${g.hints}</b></span><span>护盾 <b id="phaserShield">${g.shield?'有':'无'}</b></span><button onclick="toggleGameAudio()">音乐/音效 ${g.audio?'开':'关'}</button><button onclick="exitPhaserGame()">${testing?'返回学习':'退出'}</button></div>
   <div class="museum-controls"><div><button data-game-control="left">←</button><button data-game-control="right">→</button></div><div><button class="wide" data-game-control="jump">跳跃</button><button class="wide" data-game-control="shoot">射击</button></div></div>
   <div class="rotate-note"><div><strong>请把手机横过来</strong><p>横屏后进入全屏，才能看清平台、怪物和战斗按钮。</p></div></div>
-  <div class="game-start-card" id="gameStartCard"><div><span class="game-kicker">今日展厅 · ${escapeHtml(ensureDailyTask().chapterTitle)}</span><h2>艺术博物馆冒险</h2><p>初始10个答案碎片。方向键或A/D移动，空格跳跃，F射击。击败所有Boss即可通关。</p><div class="game-start-actions"><button class="start" onclick="startMuseumLevel()">进入展厅</button><button class="secondary" onclick="requestMuseumFullscreen()">全屏</button></div></div></div>
+  <div class="game-start-card" id="gameStartCard"><div><span class="game-kicker">${testing?'独立测试关卡':'今日展厅'} · ${escapeHtml(ensureDailyTask().chapterTitle)}</span><h2>艺术博物馆冒险</h2><p>${testing?'无需完成每日练习，测试生命、碎片、Boss和通关结果都不会写入正式进度。':'初始10个答案碎片。'}方向键或A/D移动，空格跳跃，F射击。击败所有Boss即可通关。</p><div class="game-start-actions"><button class="start" onclick="startMuseumLevel()">${testing?'开始测试':'进入展厅'}</button><button class="secondary" onclick="requestMuseumFullscreen()">全屏</button></div></div></div>
   ${testPanel}<div id="phaserBattleHost"></div></div>`;
 }
 function requestMuseumFullscreen(){const shell=document.querySelector('.phaser-shell');if(shell?.requestFullscreen)shell.requestFullscreen().catch(()=>notify('当前浏览器不允许自动全屏'))}
-function toggleGameAudio(){const g=normalizePhaserState();g.audio=!g.audio;if(g.audio&&phaserInstance)startMuseumMusic();else stopMuseumMusic();save();const buttons=[...document.querySelectorAll('.museum-hud button')];const button=buttons.find(x=>x.textContent.startsWith('音乐'));if(button)button.textContent=`音乐/音效 ${g.audio?'开':'关'}`}
+function toggleGameAudio(){const g=normalizePhaserState();g.audio=!g.audio;if(g.audio&&phaserInstance)startMuseumMusic();else stopMuseumMusic();persistPhaserState();const buttons=[...document.querySelectorAll('.museum-hud button')];const button=buttons.find(x=>x.textContent.startsWith('音乐'));if(button)button.textContent=`音乐/音效 ${g.audio?'开':'关'}`}
 function destroyPhaser(){stopMuseumMusic();if(phaserInstance){phaserInstance.destroy(true);phaserInstance=null;levelScene=null}}
 function ensureModelTexture(scene,key){
   const crop=MODEL_CROPS[key],textureKey=`model-${key}`;
@@ -128,21 +139,21 @@ class MuseumScene extends Phaser.Scene{
     if((Phaser.Input.Keyboard.JustDown(this.cursors.up)||Phaser.Input.Keyboard.JustDown(this.keys.SPACE)||phaserInput.jump)&&this.player.body.blocked.down){this.player.body.setVelocityY(-390);beep(620)}phaserInput.jump=false;
     if(Phaser.Input.Keyboard.JustDown(this.keys.F)||Phaser.Input.Keyboard.JustDown(this.keys.J)||phaserInput.shoot){this.shoot(time)}phaserInput.shoot=false;
     this.enemies.forEach(e=>{if(!e.active)return;if(Math.abs(e.x-e.spawnX)>e.patrol)e.body.setVelocityX(e.x>e.spawnX?-Math.abs(e.body.velocity.x||55):Math.abs(e.body.velocity.x||55));if(e.enemyType!=='small'&&Math.abs(this.player.x-e.x)<230)e.body.setVelocityX(this.player.x<e.x?-75:75);e.model.setFlipX(e.body.velocity.x>0);e.model.y=Math.sin(time/180+e.x)*2-e.modelHeight/2});
-    const g=normalizePhaserState();if(this.player.x>g.checkpointX+480){g.checkpointX=Math.floor(this.player.x/480)*480;save()}
+    const g=normalizePhaserState();if(this.player.x>g.checkpointX+480){g.checkpointX=Math.floor(this.player.x/480)*480;persistPhaserState()}
     this.blocks.forEach(b=>{if(!b.active)return;if(Math.abs(this.player.x-b.x)<36&&this.player.y>b.y&&this.player.y-b.y<100&&this.player.body.velocity.y<0)this.openBlock(b)});
   }
   shoot(time){if(time-this.lastShot<260)return;this.lastShot=time;const dir=this.player.model.flipX?-1:1,b=this.add.rectangle(this.player.x+dir*34,this.player.y-42,18,8,0x70e5ff);this.physics.add.existing(b);b.body.setAllowGravity(false).setVelocityX(dir*520);this.bullets.add(b);this.enemies.forEach(e=>this.physics.add.overlap(b,e,()=>this.hitEnemy(b,e)));beep(820)}
   hitEnemy(b,e){if(!b.active||!e.active)return;b.destroy();if(e.enemyType==='small'){this.defeatEnemy(e,1+((normalizePhaserState().score+e.x)%2|0));return}this.beginBattle(e)}
   touchEnemy(e){if(Date.now()-this.lastDamage<1800)return;if(e.enemyType!=='small'){this.beginBattle(e);return}this.damagePlayer('碰到怪物',e)}
-  damagePlayer(reason,enemy){this.lastDamage=Date.now();const g=normalizePhaserState();if(g.shield){g.shield=false;beep(220);return}g.hearts--;beep(120,.18);this.player.setAlpha(.35);this.player.body.setVelocityX(enemy&&this.player.x<enemy.x?-260:260);this.player.body.setVelocityY(-210);this.time.delayedCall(900,()=>this.player?.setAlpha(1));if(g.hearts<=0){g.status='failed';showGameResult(false)}updateMuseumHud();save()}
-  defeatEnemy(e,count){const g=normalizePhaserState();g.defeated.push(e.id);g.score+=10;addGameFragments(count);e.destroy();beep(980);updateMuseumHud();save()}
-  openBlock(b){const g=normalizePhaserState();g.openedBlocks.push(b.blockId);const reward=(g.openedBlocks.length+hashText(gameDate()))%4;if(reward===0)g.hearts=Math.min(5,g.hearts+1);if(reward===1)g.shield=true;if(reward===2)g.hints++;if(reward===3)addGameFragments(3);b.mark.destroy();b.destroy();beep(700);updateMuseumHud();save()}
+  damagePlayer(reason,enemy){this.lastDamage=Date.now();const g=normalizePhaserState();if(g.shield){g.shield=false;beep(220);return}g.hearts--;beep(120,.18);this.player.setAlpha(.35);this.player.body.setVelocityX(enemy&&this.player.x<enemy.x?-260:260);this.player.body.setVelocityY(-210);this.time.delayedCall(900,()=>this.player?.setAlpha(1));if(g.hearts<=0){g.status='failed';showGameResult(false)}updateMuseumHud();persistPhaserState()}
+  defeatEnemy(e,count){const g=normalizePhaserState();g.defeated.push(e.id);g.score+=10;addGameFragments(count);e.destroy();beep(980);updateMuseumHud();persistPhaserState()}
+  openBlock(b){const g=normalizePhaserState();g.openedBlocks.push(b.blockId);const reward=(g.openedBlocks.length+hashText(gameDate()))%4;if(reward===0)g.hearts=Math.min(5,g.hearts+1);if(reward===1)g.shield=true;if(reward===2)g.hints++;if(reward===3)addGameFragments(3);b.mark.destroy();b.destroy();beep(700);updateMuseumHud();persistPhaserState()}
   beginBattle(e){const g=normalizePhaserState();if(g.battle)return;if(e.enemyType==='final'&&(!g.defeated.includes('b1')||!g.defeated.includes('b2'))){notify('先击败两位展厅守关者，终Boss才会接受挑战');this.player.body.setVelocityX(-280);beep(150,.18);return}this.physics.pause();openPhaserBattle(e)}
 }
 function updateMuseumHud(){const g=normalizePhaserState(),h=document.getElementById('phaserHearts'),f=document.getElementById('phaserFragments'),tips=document.getElementById('phaserHints'),shield=document.getElementById('phaserShield');if(h)h.textContent='♥'.repeat(g.hearts);if(f)f.textContent=g.inventory.length;if(tips)tips.textContent=g.hints;if(shield)shield.textContent=g.shield?'有':'无'}
 function startMuseumLevel(){
   document.getElementById('gameStartCard')?.remove();if(phaserInstance)return;
-  const g=normalizePhaserState();if(g.status==='failed')state.phaserGame=freshPhaserState();normalizePhaserState().status='playing';save();
+  let g=normalizePhaserState();if(g.status==='failed'){if(isGameTestMode())testPhaserState=freshPhaserState();else state.phaserGame=freshPhaserState();g=normalizePhaserState()}g.status='playing';persistPhaserState();
   phaserInstance=new Phaser.Game({type:Phaser.AUTO,parent:'phaserCanvas',width:960,height:540,pixelArt:true,roundPixels:true,
     scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},physics:{default:'arcade',arcade:{gravity:{y:900},debug:false}},scene:[MuseumScene]});
   bindMuseumControls();startMuseumMusic();
@@ -153,7 +164,7 @@ function openPhaserBattle(enemy){
   const held=new Set(g.inventory.map(getDailyFragment).filter(Boolean).map(x=>x.text));
   const ranked=[...items].sort((a,b)=>answerChunks(b).filter(x=>held.has(x)).length-answerChunks(a).filter(x=>held.has(x)).length);
   const ids=Array.from({length:count},(_,i)=>(ranked[i%ranked.length]||items[(seed+i)%items.length]).id);
-  g.battle={enemyId:enemy.id,type:enemy.enemyType,hp:enemy.hp,maxHp:enemy.hp,questionIds:ids,index:0,selected:[],feedback:null};save();updateMuseumHud();renderPhaserBattle()
+  g.battle={enemyId:enemy.id,type:enemy.enemyType,hp:enemy.hp,maxHp:enemy.hp,questionIds:ids,index:0,selected:[],feedback:null};persistPhaserState();updateMuseumHud();renderPhaserBattle()
 }
 function currentPhaserBattleItem(){const b=normalizePhaserState().battle;return b?getDailyItem(b.questionIds[b.index]):null}
 function renderPhaserBattle(){
@@ -163,7 +174,7 @@ function renderPhaserBattle(){
   const fragments=g.inventory.map(getDailyFragment).filter(Boolean).map(f=>`<button class="${selected.some(x=>x.id===f.id)?'used':''}" onclick="pickPhaserFragment('${f.id}')">${escapeHtml(f.text)}</button>`).join('');
   host.innerHTML=`<div class="phaser-battle"><div class="battle-window"><div class="battle-top"><div class="battle-portrait hero"></div><div class="battle-question"><small>${escapeHtml(item.chapter)} · ${answerOrderPolicy(item)==='free'?'顺序不限':'按语意顺序'}</small><h2>${escapeHtml(item.q)}</h2><div>敌人生命 ${'◆'.repeat(b.hp)}</div></div><div class="battle-portrait enemy"></div></div>
   ${dictation?`<textarea id="phaserDictation" class="dictation-box" placeholder="写出完整意思，不要求逐字相同。"></textarea>`:`<div class="answer-slots">${slots}</div><div class="answer-fragments">${fragments}</div>`}
-  <div class="battle-feedback ${b.feedback?.correct?'good':'bad'}">${escapeHtml(b.feedback?.message||'')}</div><div class="battle-actions"><button onclick="retreatPhaserBattle()">暂时撤退</button><button onclick="usePhaserHint()">提示 ${g.hints}</button>${new URLSearchParams(location.search).has('test')?'<button onclick="testFillBattle()">测试填入正确答案</button>':''}<button class="attack" onclick="submitPhaserAttack()">提交攻击</button></div></div></div>`;
+  <div class="battle-feedback ${b.feedback?.correct?'good':'bad'}">${escapeHtml(b.feedback?.message||'')}</div><div class="battle-actions"><button onclick="retreatPhaserBattle()">暂时撤退</button><button onclick="usePhaserHint()">提示 ${g.hints}</button>${isGameTestMode()?'<button onclick="testFillBattle()">填入正确答案</button>':''}<button class="attack" onclick="submitPhaserAttack()">提交攻击</button></div></div></div>`;
 }
 function pickPhaserFragment(id){const b=normalizePhaserState().battle,f=getDailyFragment(id),item=currentPhaserBattleItem();if(!b||!f||b.selected.some(x=>x.id===id)||b.selected.length>=answerChunks(item).length)return;b.selected.push(f);renderPhaserBattle()}
 function removePhaserFragment(index){const b=normalizePhaserState().battle;if(!b)return;b.selected.splice(index,1);renderPhaserBattle()}
@@ -175,15 +186,15 @@ function submitPhaserAttack(){
   else{const got=b.selected.map(x=>x.text);correct=maskAnswerCorrect(item,got,expected)}
   if(correct){b.hp--;b.feedback={correct:true,message:'✓ 答案成立，攻击命中'};beep(1050);if(b.hp<=0){finishPhaserEnemy(b.enemyId,b.type);return}b.index=Math.min(b.index+1,b.questionIds.length-1);b.selected=[]}
   else{b.feedback={correct:false,message:'× 意思或结构不完整，敌人反击'};beep(130,.2);if(g.shield)g.shield=false;else g.hearts--;if(g.hearts<=0){g.battle=null;showGameResult(false);return}}
-  save();renderPhaserBattle();updateMuseumHud()
+  persistPhaserState();renderPhaserBattle();updateMuseumHud()
 }
-function finishPhaserEnemy(id,type){const g=normalizePhaserState(),enemy=levelScene?.enemies.find(x=>x.id===id);g.defeated.push(id);g.score+=type==='final'?100:type==='boss'?50:20;addGameFragments(type==='medium'?3:5);g.battle=null;enemy?.destroy();document.getElementById('phaserBattleHost').innerHTML='';levelScene?.physics.resume();updateMuseumHud();save();if(type==='final')showGameResult(true)}
-function retreatPhaserBattle(){normalizePhaserState().battle=null;document.getElementById('phaserBattleHost').innerHTML='';levelScene?.physics.resume();save()}
-function usePhaserHint(){const g=normalizePhaserState(),b=g.battle,item=currentPhaserBattleItem();if(!b||!item||g.hints<=0)return;g.hints--;const needed=answerChunks(item).find(text=>!b.selected.some(x=>x.text===text)),f=dailyFragmentPool().find(x=>x.questionId===item.id&&x.text===needed);if(f&&!g.inventory.includes(f.id))g.inventory.push(f.id);b.feedback={correct:true,message:`提示：答案中包含“${needed}”`};save();renderPhaserBattle()}
-function showGameResult(success){const g=normalizePhaserState();levelScene?.physics.pause();stopMuseumMusic();if(success){g.status='completed';g.completedAt=new Date().toISOString();state.xp+=120}else g.status='failed';save();const shell=document.querySelector('.phaser-shell');if(shell)shell.insertAdjacentHTML('beforeend',`<div class="game-result-card"><div><h2>${success?'展厅通关':'挑战失败'}</h2><p>${success?'三个Boss已经击败，今日学习与游戏进度已保存。':'学习记录不会清空，可以重新挑战，学习进度仍然保留。'}</p><div class="game-start-actions"><button class="start" onclick="${success?'exitPhaserGame()':'restartMuseumLevel()'}">${success?'返回航线':'重新挑战'}</button></div></div></div>`)}
-function restartMuseumLevel(){destroyPhaser();state.phaserGame=freshPhaserState();save();render()}
+function finishPhaserEnemy(id,type){const g=normalizePhaserState(),enemy=levelScene?.enemies.find(x=>x.active&&x.id===id);g.defeated.push(id);g.score+=type==='final'?100:type==='boss'?50:20;addGameFragments(type==='medium'?3:5);g.battle=null;enemy?.destroy();document.getElementById('phaserBattleHost').innerHTML='';levelScene?.physics.resume();updateMuseumHud();persistPhaserState();if(type==='final')showGameResult(true)}
+function retreatPhaserBattle(){normalizePhaserState().battle=null;document.getElementById('phaserBattleHost').innerHTML='';levelScene?.physics.resume();persistPhaserState()}
+function usePhaserHint(){const g=normalizePhaserState(),b=g.battle,item=currentPhaserBattleItem();if(!b||!item||g.hints<=0)return;g.hints--;const needed=answerChunks(item).find(text=>!b.selected.some(x=>x.text===text)),f=dailyFragmentPool().find(x=>x.questionId===item.id&&x.text===needed);if(f&&!g.inventory.includes(f.id))g.inventory.push(f.id);b.feedback={correct:true,message:`提示：答案中包含“${needed}”`};persistPhaserState();renderPhaserBattle()}
+function showGameResult(success){const g=normalizePhaserState(),testing=isGameTestMode();levelScene?.physics.pause();stopMuseumMusic();if(success){g.status='completed';g.completedAt=new Date().toISOString();if(!testing)state.xp+=120}else g.status='failed';persistPhaserState();const shell=document.querySelector('.phaser-shell');if(shell)shell.insertAdjacentHTML('beforeend',`<div class="game-result-card"><div><h2>${success?'展厅通关':'挑战失败'}</h2><p>${testing?'本次是独立测试，正式学习进度没有变化。':success?'三个Boss已经击败，今日学习与游戏进度已保存。':'学习记录不会清空，可以重新挑战，学习进度仍然保留。'}</p><div class="game-start-actions"><button class="start" onclick="${success?'exitPhaserGame()':'restartMuseumLevel()'}">${success?(testing?'返回学习':'返回航线'):'重新挑战'}</button></div></div></div>`)}
+function restartMuseumLevel(){destroyPhaser();if(isGameTestMode())testPhaserState=freshPhaserState();else state.phaserGame=freshPhaserState();persistPhaserState();render()}
 function testGameAction(action){
-  if(!new URLSearchParams(location.search).has('test'))return;
+  if(!isGameTestMode())return;
   if(action==='reset'){restartMuseumLevel();return}
   if(action==='move'){phaserInput.right=true;setTimeout(()=>phaserInput.right=false,900);return}
   if(action==='jump'||action==='shoot'){phaserInput[action]=true;return}
@@ -192,10 +203,10 @@ function testGameAction(action){
   const type=action==='final'?'final':action==='boss'?'boss':'medium',enemy=levelScene?.enemies.find(x=>x.active&&x.enemyType===type);if(enemy)levelScene.beginBattle(enemy);
 }
 function testFillBattle(){
-  if(!new URLSearchParams(location.search).has('test'))return;
+  if(!isGameTestMode())return;
   const g=normalizePhaserState(),b=g.battle,item=currentPhaserBattleItem();if(!b||!item)return;
   if(b.type==='final'){const box=document.getElementById('phaserDictation');if(box)box.value=item.answerText;return}
-  b.selected=answerChunks(item).map(text=>{let fragment=dailyFragmentPool().find(x=>x.questionId===item.id&&x.text===text);if(fragment&&!g.inventory.includes(fragment.id))g.inventory.push(fragment.id);return fragment}).filter(Boolean);save();renderPhaserBattle();updateMuseumHud();
+  b.selected=answerChunks(item).map(text=>{let fragment=dailyFragmentPool().find(x=>x.questionId===item.id&&x.text===text);if(fragment&&!g.inventory.includes(fragment.id))g.inventory.push(fragment.id);return fragment}).filter(Boolean);persistPhaserState();renderPhaserBattle();updateMuseumHud();
 }
 if(['127.0.0.1','localhost'].includes(location.hostname)){
   window.__REVISION_TEST__={
@@ -210,7 +221,9 @@ if(['127.0.0.1','localhost'].includes(location.hostname)){
 }
 const renderBeforePhaser=render;
 render=function(){
-  if(state.view!=='phaserGame'){document.body.classList.remove('phaser-mode');destroyPhaser();renderBeforePhaser();return}
+  if(state.view!=='phaserGame'&&!isGameTestMode()){document.body.classList.remove('phaser-mode');destroyPhaser();renderBeforePhaser();return}
   document.body.classList.add('phaser-mode');content.innerHTML=phaserGameView();requestAnimationFrame(()=>{if(normalizePhaserState().status==='playing')startMuseumLevel()})
 };
-ensureDailyTask();normalizePhaserState();render();
+ensureDailyTask();
+if(isGameTestMode())testPhaserState=freshPhaserState();
+normalizePhaserState();render();
