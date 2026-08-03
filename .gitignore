@@ -5,3 +5,5 @@
 .env
 .wrangler/
 node_modules/
+.edge-*-profile/
+test-*-v3.png

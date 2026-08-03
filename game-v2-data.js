@@ -1,4 +1,4 @@
-/* 艺术博物馆第二版：语义碎片、每日十题战斗牌组与章节主题。 */
+/* 艺术博物馆第三版：完整语义短语、去重牌组与章节主题。 */
 const GAME_V2_CHAPTER_THEMES={
   'art-core':{panel:0,name:'艺术本质馆',accent:0xe3b55f},
   architecture:{panel:1,name:'建筑结构馆',accent:0xb68b5b},
@@ -11,7 +11,7 @@ const GAME_V2_CHAPTER_THEMES={
   exam:{panel:8,name:'考试档案馆',accent:0xd6574f}
 };
 
-const GAME_V2_DANGLING_END=/[的是了和与及并把被在从向以于为而或其这该之]$/;
+const GAME_V2_DANGLING_END=/[的是了和与及并把被在从向以于为而或其这该之可会将由能]$/;
 const GAME_V2_KEYWORD_SPLIT=/[、，,；;|｜/]+/;
 
 function gameV2CleanText(value){
@@ -23,43 +23,50 @@ function gameV2Keywords(item){
   return [...new Set(raw.map(gameV2CleanText).filter(x=>x.length>=2&&x.length<=28))].slice(0,5);
 }
 
+function gameV2SameMeaningFragment(a,b){
+  const clean=value=>gameV2CleanText(value).replace(/[，,：:、“”‘’]/g,'').replace(/^(同时|并且|而且|因此|从而|其次|最后|以及)/,'');
+  const x=clean(a),y=clean(b);if(!x||!y)return false;
+  return x===y||(Math.min(x.length,y.length)>=4&&(x.includes(y)||y.includes(x)));
+}
+function gameV2SplitLongest(parts){
+  let longest=0;for(let i=1;i<parts.length;i++)if(parts[i].length>parts[longest].length)longest=i;
+  const part=parts[longest];if(part.length<8)return parts;
+  const connectors=['而是','同时','并且','而且','因此','从而','以及','最后','其次','再','包括','分为','体现为','表现为','作用是','功能是','基础是','核心是','本质是','面向','通过'];
+  const candidates=connectors.map(word=>({word,index:part.indexOf(word)})).filter(x=>x.index>=3&&part.length-x.index>=3).sort((a,b)=>Math.abs(a.index-part.length/2)-Math.abs(b.index-part.length/2));
+  if(!candidates.length)return parts;
+  let split=candidates[0].index;
+  while(split>3&&GAME_V2_DANGLING_END.test(part.slice(0,split)))split--;
+  if(split<3||part.length-split<3)return parts;
+  return [...parts.slice(0,longest),part.slice(0,split),part.slice(split),...parts.slice(longest+1)];
+}
+function gameV2UniqueSegments(parts){
+  const result=[];
+  for(const raw of parts){const part=gameV2CleanText(raw);if(part.length<2||GAME_V2_DANGLING_END.test(part))continue;if(!result.some(x=>gameV2SameMeaningFragment(x,part)))result.push(part)}
+  return result;
+}
+
 function gameV2SemanticSegments(item){
   const answer=gameV2CleanText(item?.answerText);
   if(!answer)return gameV2Keywords(item);
+  const keywords=gameV2Keywords(item);
   let parts=answer.split(/[，,；;。]/).map(gameV2CleanText).filter(x=>x.length>=3);
-  if(parts.length<3){
-    const connector=/((?:同时|并且|而且|因此|从而|最后|其次|再|以及|包括|分为|体现为|表现为|作用是|功能是|基础是|核心是|本质是))/g;
-    const expanded=[];
-    for(const part of parts.length?parts:[answer]){
-      const starts=[];let match;
-      connector.lastIndex=0;
-      while((match=connector.exec(part))!==null){if(match.index>=4&&part.length-match.index>=4)starts.push(match.index)}
-      if(!starts.length){expanded.push(part);continue}
-      let last=0;
-      for(const start of starts){expanded.push(part.slice(last,start));last=start}
-      expanded.push(part.slice(last));
-    }
-    parts=expanded.map(gameV2CleanText).filter(x=>x.length>=3);
-  }
+  while(parts.length<3){const next=gameV2SplitLongest(parts.length?parts:[answer]);if(next.length===parts.length)break;parts=next}
   const safe=[];
   for(const part of parts){
     if(safe.length&&GAME_V2_DANGLING_END.test(safe[safe.length-1]))safe[safe.length-1]+=part;
     else safe.push(part);
   }
-  parts=safe.filter(x=>x.length>=3&&!GAME_V2_DANGLING_END.test(x));
-  if(parts.length<3)parts=gameV2Keywords(item);
-  if(parts.length<3){
-    const fallback=answer.match(/.{3,12}(?:思想|情感|形象|创造|生产|实践|功能|艺术|生活|社会|审美|关系|过程|形式|内容|特点|作用)?/g)||[];
-    parts=fallback.map(gameV2CleanText).filter(x=>x.length>=3&&!GAME_V2_DANGLING_END.test(x));
-  }
-  if(parts.length<3)parts=[answer,'理解完整含义','联系题目作答'];
+  parts=gameV2UniqueSegments(safe);
+  if(parts.length<3&&keywords.length>=3)parts=gameV2UniqueSegments(keywords);
+  else if(parts.length<3)parts=gameV2UniqueSegments([...parts,...keywords]);
+  if(parts.length<2)parts=[answer];
   while(parts.length>5){
     let best=0;
     for(let i=1;i<parts.length-1;i++)if(parts[i].length<parts[best].length)best=i;
     const target=best===0?1:best-1;
     parts[target]+=parts[best];parts.splice(best,1);
   }
-  return [...new Set(parts)].slice(0,5);
+  return gameV2UniqueSegments(parts).slice(0,5);
 }
 
 function gameV2FragmentPool(items){

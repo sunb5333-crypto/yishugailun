@@ -1,18 +1,25 @@
 /* 三轮掩码练习：每天10个不同知识点，7道章节题加3道复习题。 */
-const PRACTICE_VERSION=4;
+const PRACTICE_VERSION=5;
 const COURSE_START_DATE='2026-07-27';
 const DAILY_LESSON_SIZE=10;
 const PRACTICE_ROUNDS=3;
 const DAILY_CURRENT_COUNT=7;
 const FREE_ORDER_IDS=new Set(['a2','a3','a4','a5','a6','a7','a8','a13','a15','a17','f1','f2','f3','m1']);
-const FREE_ORDER_PROMPT=/(包括|哪些|哪几|分类|分为|阶段|过程|特征|功能|表现|要素|方面|核心作用|什么是艺术)/;
+const FREE_ORDER_PROMPT=/(包括|哪些|哪几|分类|分为|特征|功能|表现|要素|方面|核心作用)/;
+const SEMANTIC_ORDER_PROMPT=/(关系|联系|区别|异同|统一|相互作用)/;
+const STRICT_ORDER_PROMPT=/(过程|阶段|先后|首先|其次|最后|不是.+而是|基础上|导致|因此|从.+到)/;
+const WEAK_FRAGMENT=/^(是|和|与|而|或|的|了|在|为|以|及|并|把|被|从|向|于|中|上|下)$/;
 
 function sourceQuestionIdOf(item){
   return item?.sourceQuestionId||item?.knowledgePointId||String(item?.id||'').split('-')[0];
 }
 function answerOrderPolicy(item){
   const sourceId=sourceQuestionIdOf(item),source=getQuestion(sourceId),prompt=String(source?.q||item?.q||'');
-  return FREE_ORDER_IDS.has(sourceId)||FREE_ORDER_PROMPT.test(prompt)?'free':'fixed';
+  const answer=String(item?.answerText||source?.answerText||'');
+  if(STRICT_ORDER_PROMPT.test(`${prompt}${answer}`))return'strict';
+  if(FREE_ORDER_IDS.has(sourceId)||FREE_ORDER_PROMPT.test(prompt))return'free';
+  if(SEMANTIC_ORDER_PROMPT.test(prompt))return'semantic';
+  return'strict';
 }
 function sameAnswerMultiset(selected,expected){
   if(!Array.isArray(selected)||!Array.isArray(expected)||selected.length!==expected.length)return false;
@@ -26,14 +33,14 @@ function sameAnswerMultiset(selected,expected){
   return true;
 }
 function maskAnswerCorrect(item,selected,expected){
-  return answerOrderPolicy(item)==='free'
+  return answerOrderPolicy(item)!=='strict'
     ?sameAnswerMultiset(selected,expected)
     :selected.length===expected.length&&selected.every((value,index)=>value===expected[index]);
 }
 function maskSelectionStatus(item,selected,expected,index){
   const value=selected[index];
   if(!value)return'wrong';
-  if(answerOrderPolicy(item)!=='free')return value===expected[index]?'correct':'wrong';
+  if(answerOrderPolicy(item)==='strict')return value===expected[index]?'correct':'wrong';
   const allowed=expected.filter(x=>x===value).length;
   const used=selected.slice(0,index+1).filter(x=>x===value).length;
   return used<=allowed?'correct':'wrong';
@@ -110,6 +117,21 @@ function seededShuffle(items,seedText){
 function baseAnswer(q){
   return String(q.answerText||q.memorize||(q.type==='choice'?q.options?.[q.answer]:'')||q.explain||'').trim();
 }
+function normalizedLearningText(value){
+  return String(value||'').replace(/[\s，。；、：:“”‘’（）()《》！？,.!?;:'"-]/g,'').replace(/(主要|基本|一般|通常|可以|能够)/g,'');
+}
+function materiallySameQuestion(a,b){
+  const aq=normalizedLearningText(a?.q),bq=normalizedLearningText(b?.q),aa=normalizedLearningText(baseAnswer(a)),ba=normalizedLearningText(baseAnswer(b));
+  if(!aq||!bq||!aa||!ba)return false;
+  if(aa===ba||aq===bq)return true;
+  const answerOverlap=aa.includes(ba)||ba.includes(aa),questionOverlap=aq.includes(bq)||bq.includes(aq);
+  return answerOverlap&&questionOverlap;
+}
+function uniqueLearningQuestions(items){
+  const kept=[];
+  for(const item of items)if(!kept.some(existing=>materiallySameQuestion(existing,item)))kept.push(item);
+  return kept;
+}
 function exampleForQuestion(q){
   if(PRACTICE_EXAMPLES[q.id])return PRACTICE_EXAMPLES[q.id];
   const chapterId=questionChapter[q.id];
@@ -129,12 +151,11 @@ function lessonVariants(q){
   return[{kind:'考试重点',prompt:String(q.q||`请说明${q.section}`).replace(/^背诵[：:]\s*/,''),answerText:baseAnswer(q)}];
 }
 function buildDailyItems(chapter,date){
-  const current=seededShuffle(questionBank.filter(q=>questionChapter[q.id]===chapter.id),`${date}-${chapter.id}-current`);
+  const current=uniqueLearningQuestions(seededShuffle(questionBank.filter(q=>questionChapter[q.id]===chapter.id),`${date}-${chapter.id}-current`));
   const mistakeIds=(state.mistakes||[]).map(x=>x.id);
-  const reviews=seededShuffle(questionBank.filter(q=>mistakeIds.includes(q.id)&&!current.includes(q)),`${date}-mistakes`);
-  const fallback=seededShuffle(questionBank.filter(q=>questionChapter[q.id]!==chapter.id&&!reviews.includes(q)),`${date}-reviews`);
-  const sources=[...current.slice(0,DAILY_CURRENT_COUNT),...reviews,...fallback,...current.slice(DAILY_CURRENT_COUNT)]
-    .filter((q,index,array)=>array.findIndex(x=>x.id===q.id)===index).slice(0,DAILY_LESSON_SIZE);
+  const reviews=uniqueLearningQuestions(seededShuffle(questionBank.filter(q=>mistakeIds.includes(q.id)&&!current.some(x=>x.id===q.id)),`${date}-mistakes`)).slice(0,3);
+  const fallback=uniqueLearningQuestions(seededShuffle(questionBank.filter(q=>questionChapter[q.id]!==chapter.id&&!reviews.some(x=>x.id===q.id)),`${date}-reviews`));
+  const sources=uniqueLearningQuestions([...current.slice(0,DAILY_CURRENT_COUNT),...reviews,...current.slice(DAILY_CURRENT_COUNT),...fallback]).slice(0,DAILY_LESSON_SIZE);
   return sources.flatMap(q=>lessonVariants(q).map((v,index)=>({
     id:`${q.id}-d`,knowledgePointId:q.id,sourceQuestionId:q.id,type:'mask',chapter:q.chapter||chapter.title,
     section:q.section,q:v.prompt,answerText:v.answerText,explain:q.explain||baseAnswer(q),
@@ -258,6 +279,14 @@ function currentQuestion(){return currentDailyItem()}
 function answerKey(itemId,round=ensureDailyTask().round){return`${round}:${itemId}`}
 function answerFor(id){return ensureDailyTask().answers[answerKey(id)]||null}
 
+function validMaskFragment(text,existing=[]){
+  const cleaned=String(text||'').trim(),fingerprint=normalizedLearningText(cleaned);
+  if(cleaned.length<2||WEAK_FRAGMENT.test(cleaned)||!fingerprint)return false;
+  return !existing.some(value=>{
+    const other=normalizedLearningText(value);
+    return other===fingerprint||(Math.min(other.length,fingerprint.length)>=2&&(other.includes(fingerprint)||fingerprint.includes(other)));
+  });
+}
 function maskRanges(text,count,round,itemId){
   const chars=[...text],usable=[];
   chars.forEach((char,index)=>{if(/[\u4e00-\u9fffA-Za-z0-9]/.test(char))usable.push(index)});
@@ -270,6 +299,7 @@ function maskRanges(text,count,round,itemId){
     .sort((a,b)=>b.text.length-a.text.length);
   for(const candidate of seededShuffle(semantic,`${itemId}-${round}-semantic`)){
     if(ranges.some(existing=>candidate.start<existing.end&&candidate.end>existing.start))continue;
+    if(!validMaskFragment(candidate.text,ranges.map(x=>x.text)))continue;
     ranges.push(candidate);
     if(ranges.length>=count)break;
   }
@@ -289,7 +319,18 @@ function maskRanges(text,count,round,itemId){
     if(end-start<2){
       start=Math.max(0,(usable[n]||0));end=Math.min(chars.length,start+Math.max(2,target-1));
     }
-    if(!ranges.some(existing=>start<existing.end&&end>existing.start))ranges.push({start,end,text:chars.slice(start,end).join('')});
+    const candidateText=chars.slice(start,end).join('');
+    if(!ranges.some(existing=>start<existing.end&&end>existing.start)&&validMaskFragment(candidateText,ranges.map(x=>x.text)))ranges.push({start,end,text:candidateText});
+  }
+  if(ranges.length<count){
+    for(let width=Math.min(10,Math.max(4,target));width>=2&&ranges.length<count;width--){
+      for(let start=0;start+width<=chars.length&&ranges.length<count;start++){
+        const end=start+width,textPart=chars.slice(start,end).join('');
+        if(ranges.some(existing=>start<existing.end&&end>existing.start)||!validMaskFragment(textPart,ranges.map(x=>x.text)))continue;
+        if(/^[，。；、：,.]|[，。；、：,.]$/.test(textPart))continue;
+        ranges.push({start,end,text:textPart});
+      }
+    }
   }
   return ranges.sort((a,b)=>a.start-b.start).map((range,index)=>({...range,index}));
 }
@@ -309,13 +350,14 @@ function maskPlan(item,round){
   const count=round+1,ranges=maskRanges(item.answerText,count,round,item.id);
   const lesson=ensureDailyTask();
   const nearby=lesson.items.filter(x=>x.id!==item.id).flatMap(x=>maskRanges(x.answerText,count,round,x.id).map(r=>r.text));
-  let distractors=ranges.map(r=>confusablePhrase(r.text,round)).filter((x,i,a)=>x&&!ranges.some(r=>r.text===x)&&a.indexOf(x)===i);
+  const correct=ranges.map(r=>r.text);
+  let distractors=ranges.map(r=>confusablePhrase(r.text,round)).filter((x,i,a)=>validMaskFragment(x,correct)&&a.indexOf(x)===i);
   for(const candidate of seededShuffle(nearby,`${item.id}-${round}-nearby`)){
     const min=Math.max(2,ranges[0]?.text.length-2),max=(ranges[0]?.text.length||4)+3;
-    if(candidate.length>=min&&candidate.length<=max&&!ranges.some(r=>r.text===candidate)&&!distractors.includes(candidate))distractors.push(candidate);
+    if(candidate.length>=min&&candidate.length<=max&&validMaskFragment(candidate,[...correct,...distractors]))distractors.push(candidate);
     if(distractors.length>=count+2)break;
   }
-  const options=seededShuffle([...ranges.map(r=>r.text),...distractors.slice(0,count+2)],`${item.id}-${round}-options`);
+  const options=seededShuffle([...correct,...distractors.slice(0,count+2)],`${item.id}-${round}-options`);
   return{ranges,options};
 }
 function selectedForCurrent(){
