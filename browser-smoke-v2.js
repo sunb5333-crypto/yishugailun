@@ -1,5 +1,5 @@
 const fs=require('fs');
-const BASE='http://127.0.0.1:4175/index.html?game-test=1&v=30';
+const BASE=process.argv[2]||'http://127.0.0.1:4175/index.html?game-test=1&v=30';
 const CDP='http://127.0.0.1:9223';
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 class Client{
@@ -10,11 +10,12 @@ class Client{
 }
 async function screenshot(c,name){const r=await c.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});fs.writeFileSync(name,Buffer.from(r.data,'base64'))}
 function assert(ok,message){if(!ok)throw new Error(message)}
+async function waitFor(c,expression,timeout=15000){const started=Date.now();while(Date.now()-started<timeout){try{if(await c.eval(expression))return true}catch{}await wait(200)}return false}
 async function main(){
   let tabs=await (await fetch(`${CDP}/json/list`)).json();const c=new Client(tabs[0].webSocketDebuggerUrl);await c.ready();await c.send('Page.enable');await c.send('Runtime.enable');
   await c.send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});await c.send('Page.navigate',{url:BASE});await wait(1300);
   assert(await c.eval('document.body.innerText.trim().length>100'),'Desktop page is blank');assert(await c.eval('!!document.querySelector("#gameStartCard")'),'Start card missing');
-  await c.eval('startMuseumLevel()');await wait(1700);let first=await c.eval('__REVISION_TEST__.snapshot()');assert(first.player&&first.enemies.length>=10,`Level actors missing: ${JSON.stringify(first)}; ${c.errors.join('; ')}`);assert(first.player.bodyBottom<=482,`Player feet do not align with ground: ${JSON.stringify({player:first.player,terrain:first.terrain})}`);assert(first.blocks===10,'Question blocks must equal ten');assert(first.oneWays>=14,'One-way platforms missing');assert(first.collectibles>=18,'Museum collectibles missing');assert(first.bulletRange===850,'Bullet range is not v3');
+  await c.eval('startMuseumLevel()');const initialized=await waitFor(c,'typeof __REVISION_TEST__!=="undefined"&&!!__REVISION_TEST__.snapshot().player',20000);if(!initialized){const diag=await c.eval('({href:location.href,start:typeof startMuseumLevel,test:typeof __REVISION_TEST__,phaser:typeof Phaser,scripts:[...document.scripts].map(x=>x.src),text:document.body.innerText.slice(0,500)})');throw new Error(`Level initialization timed out: ${JSON.stringify(diag)}; ${c.errors.join('; ')}`)}let first=await c.eval('__REVISION_TEST__.snapshot()');assert(first.player&&first.enemies.length>=10,`Level actors missing: ${JSON.stringify(first)}; ${c.errors.join('; ')}`);assert(first.player.bodyBottom<=482,`Player feet do not align with ground: ${JSON.stringify({player:first.player,terrain:first.terrain})}`);assert(first.blocks===10,'Question blocks must equal ten');assert(first.oneWays>=14,'One-way platforms missing');assert(first.collectibles>=18,'Museum collectibles missing');assert(first.bulletRange===850,'Bullet range is not v3');
   const x0=first.player.x;await c.eval('__REVISION_TEST__.hold("right",700)');await wait(80);let moved=await c.eval('__REVISION_TEST__.snapshot()');assert(moved.player.x>x0+40,`Player movement failed: ${JSON.stringify({x0,moved:moved.player,errors:c.errors})}`);
   const y0=moved.player.y;await c.eval('__REVISION_TEST__.action("jump")');await wait(170);let jumped=await c.eval('__REVISION_TEST__.snapshot()');assert(jumped.player.y<y0-8,'Player jump failed');
   await c.eval('__REVISION_TEST__.action("jump")');await wait(100);let doubleJump=await c.eval('__REVISION_TEST__.snapshot()');assert(doubleJump.player.jumps===2&&doubleJump.player.y<jumped.player.y,'Player double jump failed');
