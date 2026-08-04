@@ -6,4 +6,7 @@
 .wrangler/
 node_modules/
 .edge-*-profile/
+.edge-rpg-v4/
+http-v4.*.log
+test-rpg-v4-*.png
 test-*-v3.png
