@@ -1,5 +1,5 @@
 /* RPG第四版：路线、角色、装备、掉落、地图与兼容存档。 */
-const RPG_VERSION=1;
+const RPG_VERSION=2;
 const RPG_MAPS=[
   {id:'gallery',name:'古典油画长廊',panel:0,accent:'#e7b854',boss:'馆藏馆主',hazard:'移动画框'},
   {id:'blueprint',name:'建筑蓝图馆',panel:1,accent:'#7db6d4',boss:'蓝图巨像',hazard:'升降脚手架'},
@@ -42,13 +42,13 @@ const RPG_CONSUMABLES={
   hint:{name:'提示卡',icon:'?',description:'让一个正确碎片发出蓝光'}
 };
 const RPG_MONSTERS={
-  agile:{name:'敏捷小怪',tier:'small',hp:30,attack:8,defense:2,skill:'dash'},
-  ranged:{name:'远程小怪',tier:'small',hp:25,attack:7,defense:1,skill:'shot'},
-  guardian:{name:'防御中怪',tier:'medium',hp:88,attack:10,defense:12,skill:'guard'},
-  berserker:{name:'狂战中怪',tier:'medium',hp:58,attack:17,defense:4,skill:'charge'},
-  large:{name:'大型展品怪',tier:'large',hp:175,attack:21,defense:10,skill:'stomp'},
-  healer:{name:'修复师',tier:'healer',hp:52,attack:0,defense:5,skill:'heal'},
-  boss:{name:'展厅Boss',tier:'boss',hp:330,attack:23,defense:14,skill:'boss'}
+  agile:{name:'敏捷小怪',tier:'small',hp:22,attack:4,defense:2,skill:'dash'},
+  ranged:{name:'远程小怪',tier:'small',hp:18,attack:4,defense:1,skill:'shot'},
+  guardian:{name:'防御中怪',tier:'medium',hp:60,attack:6,defense:10,skill:'guard'},
+  berserker:{name:'狂战中怪',tier:'medium',hp:44,attack:8,defense:4,skill:'charge'},
+  large:{name:'大型展品怪',tier:'large',hp:120,attack:10,defense:9,skill:'stomp'},
+  healer:{name:'修复师',tier:'healer',hp:40,attack:0,defense:5,skill:'heal'},
+  boss:{name:'展厅Boss',tier:'boss',hp:180,attack:10,defense:12,skill:'boss'}
 };
 const RPG_DROP_CHANCE={small:{normal:.08,soul:.18},medium:{normal:.18,soul:.32},large:{normal:.30,soul:.48},healer:{normal:.22,soul:.38}};
 const RPG_RARITY_WEIGHTS={
@@ -74,10 +74,11 @@ function rpgStarterSword(){return{id:'starter-sword',baseId:'sword',slot:'weapon
 function rpgDefault(){const sword=rpgStarterSword();return{version:RPG_VERSION,player:rpgDefaultPlayer(),equipment:{helmet:null,chest:null,bracer:null,boots:null,weapons:[sword.id,null,null],activeWeapon:0,quickItems:['potion','shield','hint']},inventory:[sword],consumables:{potion:2,shield:1,speed:0,polish:0,lens:0,silence:0,hint:3},route:{unlocked:1,current:1,nodes:[],lastPracticeDate:''},run:null,codex:{items:[],monsters:[],bosses:[]},pendingLoot:[],createdAt:new Date().toISOString()}}
 function ensureRpgState(){
   if(!state.rpg||typeof state.rpg!=='object'){state.rpg=rpgDefault();const old=state.phaserGame;if(old&&typeof old==='object'){state.rpg.player.shield=Boolean(old.shield);state.rpg.consumables.hint=Math.max(state.rpg.consumables.hint,Number(old.hints)||0);state.rpg.consumables.potion+=Math.max(0,Number(old.hearts||0)-5)}}
-  const base=rpgDefault(),r=state.rpg;r.version=RPG_VERSION;r.player={...base.player,...r.player};r.equipment={...base.equipment,...r.equipment,weapons:[...(r.equipment?.weapons||base.equipment.weapons)].slice(0,3),quickItems:[...(r.equipment?.quickItems||base.equipment.quickItems)].slice(0,3)};
+  const base=rpgDefault(),r=state.rpg,previousVersion=Number(r.version)||1;r.version=RPG_VERSION;r.player={...base.player,...r.player};r.equipment={...base.equipment,...r.equipment,weapons:[...(r.equipment?.weapons||base.equipment.weapons)].slice(0,3),quickItems:[...(r.equipment?.quickItems||base.equipment.quickItems)].slice(0,3)};
   r.inventory=Array.isArray(r.inventory)?r.inventory:base.inventory;r.consumables={...base.consumables,...r.consumables};r.route={...base.route,...r.route,nodes:Array.isArray(r.route?.nodes)?r.route.nodes:[]};r.codex={...base.codex,...r.codex};r.pendingLoot=Array.isArray(r.pendingLoot)?r.pendingLoot:[];
   if(!r.inventory.some(x=>x.id==='starter-sword')){const sword=rpgStarterSword();r.inventory.unshift(sword);r.equipment.weapons[0]=sword.id}
-  rpgEnsureNodes(Math.max(1,r.route.unlocked));return r;
+  if(previousVersion<2)r.run=null;
+  rpgEnsureNodes(Math.max(1,r.route.unlocked));for(const node of r.route.nodes)node.stageLabel=node.stageLabel||rpgStageLabel(node.id);return r;
 }
 function rpgMapForNode(index){
   const bag=Math.floor((index-1)/5),pos=(index-1)%5,ids=RPG_MAPS.map(x=>x.id),order=rpgShuffle(ids,`rpg-map-bag-${bag}`);
@@ -88,10 +89,11 @@ function rpgNodeQuestions(index){
   const lesson=typeof ensureDailyTask==='function'?ensureDailyTask():null,items=lesson?.items||[];
   return{ids:items.map(x=>x.id).slice(0,10),snapshot:items.slice(0,10).map(x=>({id:x.id,q:x.q,answerText:x.answerText,chapter:x.chapter,section:x.section,orderPolicy:typeof answerOrderPolicy==='function'?answerOrderPolicy(x):'semantic'}))};
 }
-function rpgCreateNode(index){const map=rpgMapForNode(index);return{id:index,mapId:map.id,mapName:map.name,layoutSeed:rpgHash(`layout-${index}-${map.id}`),difficulty:index,recommendedPower:Math.round(55+index*13),status:'locked',stars:0,bestTime:0,firstClear:false,sourceDate:'',questionIds:[],questionSnapshot:[],lootPreview:index%5===0?'Boss奖励箱':'装备与艺术粉尘'}}
-function rpgEnsureNodes(count=1){const r=state.rpg;if(!r?.route)return;for(let i=1;i<=Math.min(88,count+4);i++){if(!r.route.nodes.some(x=>x.id===i))r.route.nodes.push(rpgCreateNode(i));const n=r.route.nodes.find(x=>x.id===i);n.status=n.firstClear||i<r.route.unlocked?'completed':i===r.route.unlocked&&Boolean(n.sourceDate)?'available':'locked'}return r.route.nodes}
+function rpgStageLabel(index){const cuts=[18,36,54,71,88];let world=cuts.findIndex(x=>index<=x)+1;if(world<1)world=5;const previous=world===1?0:cuts[world-2];return`${world}-${index-previous}`}
+function rpgCreateNode(index){const map=rpgMapForNode(index);return{id:index,stageLabel:rpgStageLabel(index),mapId:map.id,mapName:map.name,layoutSeed:rpgHash(`layout-${index}-${map.id}`),difficulty:index,recommendedPower:Math.round(42+index*9),status:'locked',stars:0,bestTime:0,firstClear:false,sourceDate:'',questionIds:[],questionSnapshot:[],lootPreview:index%5===0?'Boss奖励箱':'装备与艺术粉尘'}}
+function rpgEnsureNodes(count=1){const r=state.rpg;if(!r?.route)return;for(let i=1;i<=Math.min(88,count+4);i++){if(!r.route.nodes.some(x=>x.id===i))r.route.nodes.push(rpgCreateNode(i));const n=r.route.nodes.find(x=>x.id===i);n.stageLabel=n.stageLabel||rpgStageLabel(i);n.recommendedPower=Math.round(42+i*9);n.status=n.firstClear||i<r.route.unlocked?'completed':i===r.route.unlocked&&Boolean(n.sourceDate)?'available':'locked'}return r.route.nodes}
 function rpgUnlockToday(){const r=ensureRpgState(),lesson=typeof ensureDailyTask==='function'?ensureDailyTask():null;let node=r.route.nodes.find(x=>x.id===r.route.unlocked);if(!lesson?.done)return node;const today=rpgToday();if(r.route.lastPracticeDate!==today&&!node.sourceDate){const q=rpgNodeQuestions(node.id);node.sourceDate=today;node.questionIds=q.ids;node.questionSnapshot=q.snapshot;r.route.lastPracticeDate=today;node.status='available'}return node}
-function rpgLevelScale(level){return{hp:1+.09*Math.max(0,level-1),attack:1+.065*Math.max(0,level-1),reward:1+.045*Math.max(0,level-1)}}
+function rpgLevelScale(level){return{hp:1+.055*Math.max(0,level-1),attack:1+.04*Math.max(0,level-1),reward:1+.045*Math.max(0,level-1)}}
 function rpgRarityByRoll(tier,rand){const weights=RPG_RARITY_WEIGHTS[tier]||RPG_RARITY_WEIGHTS.small,total=weights.reduce((a,b)=>a+b,0);let roll=rand()*total;for(let i=0;i<weights.length;i++){roll-=weights[i];if(roll<0)return RPG_RARITIES[i]}return RPG_RARITIES[0]}
 function rpgAffix(source,rank,positive,rand){const pool=positive?RPG_POSITIVE_AFFIXES:RPG_NEGATIVE_AFFIXES,[key,label,min,max]=pool[Math.floor(rand()*pool.length)],scale=1+rank*.18,value=Math.round((min+rand()*(max-min))*scale*10)/10;return{key,label,value,positive}}
 function rpgGenerateGear({tier='small',level=1,seed='',rarityId=''}){
