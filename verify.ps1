@@ -11,10 +11,12 @@ node --check phaser-game.js
 if($LASTEXITCODE -ne 0){throw 'phaser-game.js syntax check failed'}
 node --check sw.js
 if($LASTEXITCODE -ne 0){throw 'sw.js syntax check failed'}
+node --check rpg-v6-game.js
+if($LASTEXITCODE -ne 0){throw 'rpg-v6-game.js syntax check failed'}
 node verify-game-v2.js
 if($LASTEXITCODE -ne 0){throw 'game data verification failed'}
 python -c "import json; d=json.load(open('schedule.json',encoding='utf-8')); s=json.load(open('syllabus.json',encoding='utf-8')); m=json.load(open('manifest.json',encoding='utf-8')); assert d['totalDays']==88 and d['learningDays']==60 and d['reviewDays']==28; assert len(s['chapters'])==9; assert m['display']=='standalone'; print('JSON checks passed')"
-$required=@('index.html','styles.css','navigation.css','feedback.css','game.css','practice-v2.css','phaser-game.css','app.js','knowledge-extra.js','practice-v2.js','game-v2-data.js','phaser-game.js','verify-game-v2.js','assets/vendor/phaser.min.js','assets/vendor/PHASER-LICENSE.txt','assets/art/character-lineup.png','assets/art/hero-sprites-v2.png','assets/art/enemy-sprites-v2.png','assets/art/boss-sprites-v2.png','assets/art/chapter-backgrounds-v2.png','sw.js','manifest.json','schedule.json','syllabus.json')
+$required=@('index.html','styles.css','navigation.css','feedback.css','game.css','practice-v2.css','phaser-game.css','rpg-v4.css','app.js','knowledge-extra.js','practice-v2.js','game-v2-data.js','phaser-game.js','rpg-v6-game.js','verify-game-v2.js','assets/vendor/phaser.min.js','assets/vendor/PHASER-LICENSE.txt','assets/art/character-lineup.png','assets/art/hero-sprites-v2.png','assets/art/enemy-sprites-v2.png','assets/art/boss-sprites-v2.png','assets/art/chapter-backgrounds-v2.png','assets/art/rpg-items-v1.png','sw.js','manifest.json','schedule.json','syllabus.json')
 foreach($file in $required){if(-not (Test-Path -LiteralPath $file)){throw "Missing $file"}}
 $html=Get-Content -Raw index.html
 $css=Get-Content -Raw styles.css
