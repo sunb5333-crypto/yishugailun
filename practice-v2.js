@@ -382,6 +382,8 @@ function submitMaskAnswer(){
   item.orderPolicy=answerOrderPolicy(item);
   const correct=maskAnswerCorrect(item,selected,expected);
   lesson.answers[key]={answered:true,correct,userAnswer:[...selected],expected,submittedAt:new Date().toISOString()};
+  // 并列型答案允许任意点击顺序；判对后按原句槽位回填，避免正确答案显示成不通顺的句子。
+  if(correct&&item.orderPolicy==='free')lesson.selections[key]=[...expected];
   if(lesson.retryBackups)delete lesson.retryBackups[key];
   if(correct){state.xp+=10+lesson.round*5;markCorrect(getQuestion(item.sourceQuestionId)||item)}
   else upsertMistake(getQuestion(item.sourceQuestionId)||item,selected.join('、'));

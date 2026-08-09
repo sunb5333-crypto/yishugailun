@@ -13,6 +13,10 @@ node --check sw.js
 if($LASTEXITCODE -ne 0){throw 'sw.js syntax check failed'}
 node --check rpg-v6-game.js
 if($LASTEXITCODE -ne 0){throw 'rpg-v6-game.js syntax check failed'}
+node --check rpg-v4-data.js
+if($LASTEXITCODE -ne 0){throw 'rpg-v4-data.js syntax check failed'}
+node --check rpg-v4-game.js
+if($LASTEXITCODE -ne 0){throw 'rpg-v4-game.js syntax check failed'}
 node verify-game-v2.js
 if($LASTEXITCODE -ne 0){throw 'game data verification failed'}
 python -c "import json; d=json.load(open('schedule.json',encoding='utf-8')); s=json.load(open('syllabus.json',encoding='utf-8')); m=json.load(open('manifest.json',encoding='utf-8')); assert d['totalDays']==88 and d['learningDays']==60 and d['reviewDays']==28; assert len(s['chapters'])==9; assert m['display']=='standalone'; print('JSON checks passed')"
@@ -46,6 +50,14 @@ if($game -notmatch 'retreatLocked' -or $game -notmatch 'hero-attack' -or $game -
 if($game -notmatch 'makeOneWay' -or $game -notmatch 'SECOND_JUMP_SPEED' -or $game -notmatch 'createShieldEffect'){throw 'Missing one-way platforms, double jump or shield effect'}
 if($game -notmatch 'createExplorationObjects' -or $game -notmatch 'activateCheckpoint' -or $game -notmatch 'collected'){throw 'Missing exploration objects or checkpoints'}
 if($practice -notmatch 'materiallySameQuestion' -or $practice -notmatch 'validMaskFragment' -or $practice -notmatch "return'semantic'"){throw 'Missing v3 duplicate filtering or semantic grading'}
+$rpgData=Get-Content -Raw rpg-v4-data.js
+$rpgGame=Get-Content -Raw rpg-v4-game.js
+$rpgV6=Get-Content -Raw rpg-v6-game.js
+if($rpgData -notmatch "staff:\{name:'法杖'" -or $rpgData -notmatch 'maxMana' -or $rpgData -notmatch 'manaRegen'){throw 'Missing staff or mana data model'}
+if(([regex]::Matches($rpgData,"id:'(gallery|blueprint|garden|cathedral|modern)'")).Count -lt 5 -or $rpgData -notmatch 'RPG_DROP_CHANCE' -or $rpgData -notmatch 'rpgRollBossChest'){throw 'Missing five maps or tiered loot tables'}
+if($rpgGame -notmatch 'RPG_WEAPONS.staff' -or $rpgGame -notmatch 'magicBurst'){throw 'Missing staff combat implementation'}
+if($rpgV6 -notmatch 'MUSEUM EXPEDITION · 88 STAGES' -or $rpgV6 -notmatch 'hud-mana' -or $rpgV6 -notmatch 'groundLootSnapshot'){throw 'Missing 88-stage route, mana HUD or checkpoint loot snapshots'}
+if($practice -notmatch "item.orderPolicy==='free'" -or $practice -notmatch 'lesson.selections\[key\]'){throw 'Missing canonical placement after unordered grading'}
 if(([regex]::Matches($extra,"id:'x\d\d'")).Count -lt 26){throw 'Extra chapter coverage is incomplete'}
 foreach($chapter in @('art-core','architecture','residence','garden','religion','modern','creation','appreciation','exam')){
   if($js -notmatch ":'$chapter'"){throw "No question coverage for $chapter"}

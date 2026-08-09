@@ -1,5 +1,5 @@
 /* RPG第四版：路线、角色、装备、掉落、地图与兼容存档。 */
-const RPG_VERSION=2;
+const RPG_VERSION=3;
 const RPG_MAPS=[
   {id:'gallery',name:'古典油画长廊',panel:0,accent:'#e7b854',boss:'馆藏馆主',hazard:'移动画框'},
   {id:'blueprint',name:'建筑蓝图馆',panel:1,accent:'#7db6d4',boss:'蓝图巨像',hazard:'升降脚手架'},
@@ -19,7 +19,8 @@ const RPG_WEAPONS={
   sword:{name:'单手剑',multiplier:1,rate:1,range:78,combo:3,tradeoff:'均衡，没有额外优势'},
   greatsword:{name:'重剑',multiplier:1.75,rate:.58,range:102,combo:1,tradeoff:'移动速度 -12%',movePenalty:.12,stagger:2},
   dual:{name:'双剑',multiplier:.66,rate:1.7,range:62,combo:5,tradeoff:'防御 -8%',defensePenalty:.08},
-  bow:{name:'长弓',multiplier:.9,rate:.8,range:820,combo:1,tradeoff:'近距离伤害 -20%',closePenalty:.2,pierce:3}
+  bow:{name:'长弓',multiplier:.9,rate:.8,range:820,combo:1,tradeoff:'近距离伤害 -20%',closePenalty:.2,pierce:3},
+  staff:{name:'法杖',multiplier:1.18,rate:.72,range:690,combo:3,manaCost:16,tradeoff:'施法消耗16点法力',pierce:1}
 };
 const RPG_ARMOR={helmet:'头盔',chest:'胸甲',bracer:'护腕',boots:'战靴'};
 const RPG_SET_ROWS={sword:0,greatsword:1,dual:2,bow:3,staff:4};
@@ -43,6 +44,7 @@ const RPG_LEGENDARIES={
   greatsword:{name:'断代重锋',effect:'蓄力攻击破甲并眩晕大型怪',drawback:'持有时移动 -12%'},
   dual:{name:'双生刻刀',effect:'成功躲避后3次攻击必定暴击',drawback:'防御 -12%'},
   bow:{name:'远景长弓',effect:'满蓄力箭贯穿3名敌人，远距伤害 +35%',drawback:'近距伤害 -20%'},
+  staff:{name:'真理法杖',effect:'每第三次施法不消耗法力并产生连锁爆炸',drawback:'最大生命 -10%'},
   helmet:{name:'真知之冠',effect:'每个灵魂题获得一次提示蓝光',drawback:'最大生命 -10%'},
   chest:{name:'馆藏守护甲',effect:'每个记录点后首次致命伤保留1生命并获得护盾',drawback:'移动 -8%'},
   bracer:{name:'铭文护腕',effect:'答对灵魂题后攻速 +8%，最多3层',drawback:'答错清除层数'},
@@ -50,10 +52,12 @@ const RPG_LEGENDARIES={
 };
 const RPG_LEGENDARY_FIXED_AFFIXES={
   sword:[['attack','攻击',12],['crit','暴击率',8],['attackSpeed','攻击速度',10]],greatsword:[['attack','攻击',20],['defense','防御',10],['knockback','击退',20]],dual:[['attackSpeed','攻击速度',20],['crit','暴击率',12],['dodgeCooldown','闪避冷却',-15]],bow:[['range','射程',25],['attack','远程伤害',18],['crit','暴击率',10]],
+  staff:[['attack','法术攻击',18],['maxMana','最大法力',20],['manaRegen','法力恢复',18]],
   helmet:[['crit','暴击率',6],['maxHp','最大生命',10],['dodgeCooldown','闪避冷却',-8]],chest:[['maxHp','最大生命',22],['defense','防御',12],['moveSpeed','移动速度',5]],bracer:[['attackSpeed','攻击速度',10],['attack','攻击',10],['coinBonus','金币加成',8]],boots:[['moveSpeed','移动速度',10],['dodgeCooldown','闪避冷却',-12],['maxHp','最大生命',8]]
 };
 const RPG_CONSUMABLES={
   potion:{name:'修复药剂',icon:'✚',description:'恢复35%最大生命'},
+  mana:{name:'灵感墨水',icon:'◆',description:'恢复45%最大法力'},
   shield:{name:'护盾晶体',icon:'◉',description:'抵挡下一次攻击'},
   speed:{name:'迅捷素描',icon:'»',description:'12秒移动+20%，躲避冷却-20%'},
   polish:{name:'武器上光剂',icon:'✦',description:'12秒攻击+25%'},
@@ -77,7 +81,8 @@ const RPG_RARITY_WEIGHTS={
 const RPG_POSITIVE_AFFIXES=[
   ['attack','攻击',3,12],['crit','暴击率',2,8],['attackSpeed','攻击速度',3,12],['range','射程',4,15],
   ['maxHp','最大生命',4,14],['defense','防御',3,12],['moveSpeed','移动速度',2,9],['dodgeCooldown','躲避冷却',-12,-3],
-  ['knockback','击退',5,20],['coinBonus','金币加成',4,15],['xpBonus','经验加成',4,15]
+  ['knockback','击退',5,20],['coinBonus','金币加成',4,15],['xpBonus','经验加成',4,15],
+  ['maxMana','最大法力',5,18],['manaRegen','法力恢复',4,16]
 ];
 const RPG_NEGATIVE_AFFIXES=[
   ['moveSpeed','移动速度',-15,-4],['attackSpeed','攻击速度',-15,-4],['maxHp','最大生命',-15,-5],
@@ -89,16 +94,17 @@ function rpgRandom(seed){let x=(seed>>>0)||123456789;return()=>{x^=x<<13;x^=x>>>
 function rpgShuffle(list,seed){const out=[...list],rand=rpgRandom(rpgHash(seed));for(let i=out.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[out[i],out[j]]=[out[j],out[i]]}return out}
 function rpgUid(prefix,seed){return`${prefix}-${Date.now().toString(36)}-${rpgHash(seed+Math.random()).toString(36)}`}
 function rpgToday(){return typeof gameDate==='function'?gameDate():new Date().toISOString().slice(0,10)}
-function rpgDefaultPlayer(){return{level:1,xp:0,coins:0,dust:0,maxHp:100,hp:100,attack:10,defense:5,crit:.05,moveSpeed:245,dodgeCooldown:1200,shield:false,legendaryStacks:0}}
+function rpgDefaultPlayer(){return{level:1,xp:0,coins:0,dust:0,maxHp:100,hp:100,maxMana:100,mana:100,manaRegen:4,attack:10,defense:5,crit:.05,moveSpeed:245,dodgeCooldown:1200,shield:false,legendaryStacks:0}}
 function rpgStarterSword(){const set=rpgSetInfo('plain','sword');return{id:'starter-sword',baseId:'sword',slot:'weapon',rarity:'plain',rarityRank:0,itemLevel:1,upgrade:0,name:'见习修复剑',mainStat:10,affixes:[],drawback:'均衡，没有额外优势',setId:set.id,setName:set.name,visual:{atlas:'plain',row:set.row,col:0},locked:true}}
 function rpgAttachGearVisual(item){if(!item||item.visual?.atlas!==undefined)return item;const rarity=RPG_RARITIES.find(x=>x.id===item.rarity)||RPG_RARITIES[Math.max(0,Math.min(5,item.rarityRank||0))]||RPG_RARITIES[0],routes=Object.keys(RPG_SET_ROWS),route=item.slot==='weapon'&&RPG_SET_ROWS[item.baseId]!==undefined?item.baseId:routes[Math.abs(rpgHash(item.id||item.name||item.slot))%routes.length],set=rpgSetInfo(rarity.id,route);item.setId=set.id;item.setName=set.name;item.visual={atlas:rarity.id,row:set.row,col:RPG_SET_SLOT_COLS[item.slot]??0};return item}
-function rpgDefault(){const sword=rpgStarterSword();return{version:RPG_VERSION,player:rpgDefaultPlayer(),equipment:{helmet:null,chest:null,bracer:null,boots:null,weapons:[sword.id,null,null],activeWeapon:0,quickItems:['potion','shield','hint']},inventory:[sword],consumables:{potion:2,shield:1,speed:0,polish:0,lens:0,silence:0,hint:3},route:{unlocked:1,current:1,nodes:[],lastPracticeDate:''},run:null,codex:{items:[],monsters:[],bosses:[]},pendingLoot:[],createdAt:new Date().toISOString()}}
+function rpgDefault(){const sword=rpgStarterSword();return{version:RPG_VERSION,player:rpgDefaultPlayer(),equipment:{helmet:null,chest:null,bracer:null,boots:null,weapons:[sword.id,null,null],activeWeapon:0,quickItems:['potion','mana','shield']},inventory:[sword],consumables:{potion:2,mana:2,shield:1,speed:0,polish:0,lens:0,silence:0,hint:3},route:{unlocked:1,current:1,nodes:[],lastPracticeDate:''},run:null,codex:{items:[],monsters:[],bosses:[]},pendingLoot:[],createdAt:new Date().toISOString()}}
 function ensureRpgState(){
   if(!state.rpg||typeof state.rpg!=='object'){state.rpg=rpgDefault();const old=state.phaserGame;if(old&&typeof old==='object'){state.rpg.player.shield=Boolean(old.shield);state.rpg.consumables.hint=Math.max(state.rpg.consumables.hint,Number(old.hints)||0);state.rpg.consumables.potion+=Math.max(0,Number(old.hearts||0)-5)}}
   const base=rpgDefault(),r=state.rpg,previousVersion=Number(r.version)||1;r.version=RPG_VERSION;r.player={...base.player,...r.player};r.equipment={...base.equipment,...r.equipment,weapons:[...(r.equipment?.weapons||base.equipment.weapons)].slice(0,3),quickItems:[...(r.equipment?.quickItems||base.equipment.quickItems)].slice(0,3)};
   r.inventory=(Array.isArray(r.inventory)?r.inventory:base.inventory).map(rpgAttachGearVisual);r.consumables={...base.consumables,...r.consumables};r.route={...base.route,...r.route,nodes:Array.isArray(r.route?.nodes)?r.route.nodes:[]};r.codex={...base.codex,...r.codex};r.pendingLoot=Array.isArray(r.pendingLoot)?r.pendingLoot:[];
   if(!r.inventory.some(x=>x.id==='starter-sword')){const sword=rpgStarterSword();r.inventory.unshift(sword);r.equipment.weapons[0]=sword.id}
   if(previousVersion<2)r.run=null;
+  if(previousVersion<3){r.player.maxMana=Number(r.player.maxMana)||100;r.player.mana=Math.min(r.player.maxMana,Number(r.player.mana)||r.player.maxMana);r.player.manaRegen=Number(r.player.manaRegen)||4}
   rpgEnsureNodes(Math.max(1,r.route.unlocked));for(const node of r.route.nodes)node.stageLabel=node.stageLabel||rpgStageLabel(node.id);return r;
 }
 function rpgMapForNode(index){
@@ -135,11 +141,11 @@ function rpgRollBossChest(run,rand,base={coins:0,xp:0,items:[],consumables:[]}){
 }
 function rpgItemById(id){return ensureRpgState().inventory.find(x=>x.id===id)||null}
 function rpgComputedStats(){
-  const r=ensureRpgState(),p=r.player,level=Math.max(1,p.level),stats={maxHp:100+(level-1)*3,attack:10+(level-1)*.5,defense:5+(level-1)*.25,crit:.05,attackSpeed:1,moveSpeed:245,dodgeCooldown:1200,range:1,coinBonus:0,xpBonus:0};
-  const ids=[r.equipment.helmet,r.equipment.chest,r.equipment.bracer,r.equipment.boots,r.equipment.weapons[r.equipment.activeWeapon]].filter(Boolean),equippedItems=ids.map(rpgItemById).filter(Boolean),setCounts={},setRanks={};for(const item of equippedItems){const upgrade=1+(item.upgrade||0)*.05;if(item.slot==='weapon')stats.attack+=item.mainStat*upgrade;else stats.defense+=item.mainStat*.55*upgrade;for(const a of item.affixes||[]){const v=a.value/100;if(a.key==='attack')stats.attack*=1+v;else if(a.key==='maxHp')stats.maxHp*=1+v;else if(a.key==='defense')stats.defense*=1+v;else if(a.key==='crit')stats.crit+=v;else if(a.key==='attackSpeed')stats.attackSpeed*=1+v;else if(a.key==='moveSpeed')stats.moveSpeed*=1+v;else if(a.key==='dodgeCooldown')stats.dodgeCooldown*=1+v;else if(a.key==='range')stats.range*=1+v;else if(a.key==='coinBonus'||a.key==='xpBonus')stats[a.key]+=v}if(item.setId){setCounts[item.setId]=(setCounts[item.setId]||0)+1;setRanks[item.setId]=Math.min(setRanks[item.setId]??item.rarityRank,item.rarityRank)}}
-  const hiddenSetSkills=[];for(const [setId,count] of Object.entries(setCounts)){const route=setId.split('-').pop(),rank=setRanks[setId]||0;if(count>=2){if(route==='sword')stats.crit+=.04;if(route==='greatsword')stats.defense*=1.1;if(route==='dual')stats.attackSpeed*=1.08;if(route==='bow')stats.range*=1.1;if(route==='staff')stats.xpBonus+=.06}if(count>=4){if(route==='sword')stats.attack*=1.1;if(route==='greatsword')stats.maxHp*=1.1;if(route==='dual')stats.dodgeCooldown*=.88;if(route==='bow')stats.crit+=.06;if(route==='staff')stats.attackSpeed*=1.1}if(count>=5&&rank>=3)hiddenSetSkills.push(RPG_SET_HIDDEN_SKILLS[setId]||RPG_SET_HIDDEN_SKILLS[route]||'展厅共鸣')}
+  const r=ensureRpgState(),p=r.player,level=Math.max(1,p.level),stats={maxHp:100+(level-1)*3,maxMana:100+(level-1)*2,manaRegen:4+(level-1)*.08,attack:10+(level-1)*.5,defense:5+(level-1)*.25,crit:.05,attackSpeed:1,moveSpeed:245,dodgeCooldown:1200,range:1,coinBonus:0,xpBonus:0};
+  const ids=[r.equipment.helmet,r.equipment.chest,r.equipment.bracer,r.equipment.boots,r.equipment.weapons[r.equipment.activeWeapon]].filter(Boolean),equippedItems=ids.map(rpgItemById).filter(Boolean),setCounts={},setRanks={};for(const item of equippedItems){const upgrade=1+(item.upgrade||0)*.05;if(item.slot==='weapon')stats.attack+=item.mainStat*upgrade;else stats.defense+=item.mainStat*.55*upgrade;for(const a of item.affixes||[]){const v=a.value/100;if(a.key==='attack')stats.attack*=1+v;else if(a.key==='maxHp')stats.maxHp*=1+v;else if(a.key==='maxMana')stats.maxMana*=1+v;else if(a.key==='manaRegen')stats.manaRegen*=1+v;else if(a.key==='defense')stats.defense*=1+v;else if(a.key==='crit')stats.crit+=v;else if(a.key==='attackSpeed')stats.attackSpeed*=1+v;else if(a.key==='moveSpeed')stats.moveSpeed*=1+v;else if(a.key==='dodgeCooldown')stats.dodgeCooldown*=1+v;else if(a.key==='range')stats.range*=1+v;else if(a.key==='coinBonus'||a.key==='xpBonus')stats[a.key]+=v}if(item.setId){setCounts[item.setId]=(setCounts[item.setId]||0)+1;setRanks[item.setId]=Math.min(setRanks[item.setId]??item.rarityRank,item.rarityRank)}}
+  const hiddenSetSkills=[],hiddenSetRoutes=[];for(const [setId,count] of Object.entries(setCounts)){const route=setId.split('-').pop(),rank=setRanks[setId]||0;if(count>=2){if(route==='sword')stats.crit+=.04;if(route==='greatsword')stats.defense*=1.1;if(route==='dual')stats.attackSpeed*=1.08;if(route==='bow')stats.range*=1.1;if(route==='staff'){stats.maxMana*=1.12;stats.xpBonus+=.06}}if(count>=4){if(route==='sword')stats.attack*=1.1;if(route==='greatsword')stats.maxHp*=1.1;if(route==='dual')stats.dodgeCooldown*=.88;if(route==='bow')stats.crit+=.06;if(route==='staff'){stats.attackSpeed*=1.1;stats.manaRegen*=1.25}}if(count>=5&&rank>=3){hiddenSetSkills.push(RPG_SET_HIDDEN_SKILLS[setId]||RPG_SET_HIDDEN_SKILLS[route]||'展厅共鸣');hiddenSetRoutes.push({route,rank,setId})}}
   const legendaryIds=equippedItems.filter(x=>x.rarity==='legendary').map(x=>x.baseId);if(legendaryIds.includes('bracer'))stats.attackSpeed*=1+(r.player.legendaryStacks||0)*.08;
-  const active=rpgItemById(r.equipment.weapons[r.equipment.activeWeapon])||rpgStarterSword(),weapon=RPG_WEAPONS[active.baseId]||RPG_WEAPONS.sword;if(weapon.movePenalty)stats.moveSpeed*=1-weapon.movePenalty;if(weapon.defensePenalty)stats.defense*=1-weapon.defensePenalty;return{...stats,maxHp:Math.round(stats.maxHp),attack:Math.round(stats.attack*10)/10,defense:Math.round(stats.defense*10)/10,weapon,weaponItem:active,legendaryIds,setCounts,hiddenSetSkills,power:Math.round(stats.maxHp*.22+stats.attack*4+stats.defense*2+stats.crit*100+active.rarityRank*18+(active.upgrade||0)*8)};
+  const active=rpgItemById(r.equipment.weapons[r.equipment.activeWeapon])||rpgStarterSword(),weapon=RPG_WEAPONS[active.baseId]||RPG_WEAPONS.sword;if(weapon.movePenalty)stats.moveSpeed*=1-weapon.movePenalty;if(weapon.defensePenalty)stats.defense*=1-weapon.defensePenalty;return{...stats,maxHp:Math.round(stats.maxHp),maxMana:Math.round(stats.maxMana),manaRegen:Math.round(stats.manaRegen*10)/10,attack:Math.round(stats.attack*10)/10,defense:Math.round(stats.defense*10)/10,weapon,weaponItem:active,legendaryIds,setCounts,hiddenSetSkills,hiddenSetRoutes,power:Math.round(stats.maxHp*.22+stats.maxMana*.08+stats.attack*4+stats.defense*2+stats.crit*100+active.rarityRank*18+(active.upgrade||0)*8)};
 }
 function rpgAddLoot(loot){const r=ensureRpgState();r.player.coins+=loot.coins||0;r.player.xp+=loot.xp||0;while(r.player.xp>=100+35*(r.player.level-1)){r.player.xp-=100+35*(r.player.level-1);r.player.level++;r.player.hp=rpgComputedStats().maxHp}for(const item of loot.items||[]){if(r.inventory.length<120)r.inventory.push(item);else r.pendingLoot.push(item);if(!r.codex.items.includes(item.baseId))r.codex.items.push(item.baseId)}for(const id of loot.consumables||[])r.consumables[id]=(r.consumables[id]||0)+1;r.player.hp=Math.min(r.player.hp,rpgComputedStats().maxHp)}
 function rpgUpgradeItem(id){const r=ensureRpgState(),item=rpgItemById(id);if(!item||item.upgrade>=10)return{ok:false,message:'已达到＋10'};const cost=80*(item.upgrade+1)*(item.rarityRank+1),dust=Math.max(1,item.rarityRank)*(item.upgrade+1);if(r.player.coins<cost||r.player.dust<dust)return{ok:false,message:`需要 ${cost} 金币和 ${dust} 粉尘`};r.player.coins-=cost;r.player.dust-=dust;item.upgrade++;return{ok:true,message:`${item.name} 已强化至＋${item.upgrade}`}}
