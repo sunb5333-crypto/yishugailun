@@ -13,6 +13,8 @@ node --check sw.js
 if($LASTEXITCODE -ne 0){throw 'sw.js syntax check failed'}
 node --check rpg-v6-game.js
 if($LASTEXITCODE -ne 0){throw 'rpg-v6-game.js syntax check failed'}
+node --check rpg-v7-game.js
+if($LASTEXITCODE -ne 0){throw 'rpg-v7-game.js syntax check failed'}
 node --check rpg-v4-data.js
 if($LASTEXITCODE -ne 0){throw 'rpg-v4-data.js syntax check failed'}
 node --check rpg-v4-game.js
@@ -22,6 +24,7 @@ if($LASTEXITCODE -ne 0){throw 'game data verification failed'}
 python -c "import json; d=json.load(open('schedule.json',encoding='utf-8')); s=json.load(open('syllabus.json',encoding='utf-8')); m=json.load(open('manifest.json',encoding='utf-8')); assert d['totalDays']==88 and d['learningDays']==60 and d['reviewDays']==28; assert len(s['chapters'])==9; assert m['display']=='standalone'; print('JSON checks passed')"
 $required=@('index.html','styles.css','navigation.css','feedback.css','game.css','practice-v2.css','phaser-game.css','rpg-v4.css','app.js','knowledge-extra.js','practice-v2.js','game-v2-data.js','phaser-game.js','rpg-v6-game.js','verify-game-v2.js','assets/vendor/phaser.min.js','assets/vendor/PHASER-LICENSE.txt','assets/art/character-lineup.png','assets/art/hero-sprites-v2.png','assets/art/enemy-sprites-v2.png','assets/art/boss-sprites-v2.png','assets/art/chapter-backgrounds-v2.png','assets/art/rpg-items-v1.png','sw.js','manifest.json','schedule.json','syllabus.json')
 $required+=@('rpg-v4-data.js','rpg-v4-game.js','rpg-v5-game.js','assets/art/enemy-souls-v4.png','assets/art/rpg-weapons-v2.png','assets/art/rpg-gear-consumables-v2.png','assets/art/rpg-set-plain-v1.png','assets/art/rpg-set-common-v1.png','assets/art/rpg-set-excellent-v1.png','assets/art/rpg-set-fine-v1.png','assets/art/rpg-set-mythic-v1.png','assets/art/rpg-set-legendary-v1.png','assets/art/rpg-hero-set-plain-v1.png','assets/art/rpg-hero-set-common-v1.png','assets/art/rpg-hero-set-excellent-v1.png','assets/art/rpg-hero-set-fine-v1.png','assets/art/rpg-hero-set-mythic-v1.png','assets/art/rpg-hero-set-legendary-v1.png')
+$required+='rpg-v7-game.js'
 foreach($file in $required){if(-not (Test-Path -LiteralPath $file)){throw "Missing $file"}}
 $html=Get-Content -Raw index.html
 $css=Get-Content -Raw styles.css
@@ -54,6 +57,7 @@ if($practice -notmatch 'materiallySameQuestion' -or $practice -notmatch 'validMa
 $rpgData=Get-Content -Raw rpg-v4-data.js
 $rpgGame=Get-Content -Raw rpg-v4-game.js
 $rpgV6=Get-Content -Raw rpg-v6-game.js
+$rpgV9=Get-Content -Raw rpg-v7-game.js
 if($rpgData -notmatch "staff:\{name:'法杖'" -or $rpgData -notmatch 'maxMana' -or $rpgData -notmatch 'manaRegen'){throw 'Missing staff or mana data model'}
 if(([regex]::Matches($rpgData,"id:'(gallery|blueprint|garden|cathedral|modern)'")).Count -lt 5 -or $rpgData -notmatch 'RPG_DROP_CHANCE' -or $rpgData -notmatch 'rpgRollBossChest'){throw 'Missing five maps or tiered loot tables'}
 if($rpgGame -notmatch 'RPG_WEAPONS.staff' -or $rpgGame -notmatch 'magicBurst'){throw 'Missing staff combat implementation'}
@@ -72,6 +76,10 @@ if($rpgGame -notmatch '\*\.2' -or $rpgGame -notmatch 'enemySnapshot' -or $rpgV6 
 if($rpgData -notmatch 'r\.inventory\.length<120' -or $rpgData -notmatch 'item\.upgrade>=10' -or $rpgData -notmatch '1\+\(item\.upgrade\|\|0\)\*\.05'){throw 'Inventory capacity or +10 enhancement rules are incomplete'}
 if($rpgData -notmatch 'spentDust\*\.35' -or $rpgV6 -notmatch 'rpgV6ClaimPending' -or $rpgV6 -notmatch 'pendingLoot\.splice'){throw '35% enhancement refund or temporary loot chest recovery is incomplete'}
 if($rpgV6 -notmatch 'runSeed=node\.layoutSeed' -or $rpgV6 -notmatch 'rpgV6EnemyPlan\(node,replay,seed\)'){throw 'Soul carriers are not randomized per run while remaining refresh-stable'}
+if($rpgV9 -notmatch 'RPG_V9_BACKPACK_MAX=24' -or $rpgV9 -notmatch 'RPG_V9_STORAGE_MAX=200'){throw 'Missing 24-slot backpack or 200-slot warehouse'}
+if($rpgV9 -notmatch 'rpg-v9-route-layout' -or $rpgV9 -notmatch 'rpg-v9-armory'){throw 'Missing selected route B or armory C interface'}
+if($rpgV9 -notmatch 'buildHealerTexture' -or $rpgV9 -notmatch 'actionLockedUntil' -or $rpgV9 -notmatch 'addTrapModels'){throw 'Missing healer, stable action lock or trap models'}
+if($rpgV9 -notmatch 'cleared.length===required.length' -or $rpgV9 -notmatch 'portalRequirements'){throw 'Portal does not require a complete main-route clear'}
 if($practice -notmatch "item.orderPolicy==='free'" -or $practice -notmatch 'lesson.selections\[key\]'){throw 'Missing canonical placement after unordered grading'}
 if(([regex]::Matches($extra,"id:'x\d\d'")).Count -lt 26){throw 'Extra chapter coverage is incomplete'}
 foreach($chapter in @('art-core','architecture','residence','garden','religion','modern','creation','appreciation','exam')){
