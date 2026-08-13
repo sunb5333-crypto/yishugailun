@@ -17,9 +17,9 @@ const RPG_RARITIES=[
 ];
 const RPG_WEAPONS={
   sword:{name:'单手剑',multiplier:1,rate:1,range:78,combo:3,tradeoff:'均衡，没有额外优势'},
-  greatsword:{name:'重剑',multiplier:1.75,rate:.58,range:102,combo:1,tradeoff:'移动速度 -12%',movePenalty:.12,stagger:2},
+  greatsword:{name:'重剑',multiplier:1.75,rate:.58,range:102,combo:3,tradeoff:'移动速度 -12%',movePenalty:.12,stagger:2},
   dual:{name:'双剑',multiplier:.66,rate:1.7,range:62,combo:5,tradeoff:'防御 -8%',defensePenalty:.08},
-  bow:{name:'长弓',multiplier:.9,rate:.8,range:820,combo:1,tradeoff:'近距离伤害 -20%',closePenalty:.2,pierce:3},
+  bow:{name:'长弓',multiplier:.9,rate:.8,range:820,combo:4,tradeoff:'近距离伤害 -20%',closePenalty:.2,pierce:3},
   staff:{name:'法杖',multiplier:1.18,rate:.72,range:690,combo:3,manaCost:16,tradeoff:'施法消耗16点法力',pierce:1}
 };
 const RPG_ARMOR={helmet:'头盔',chest:'胸甲',bracer:'护腕',boots:'战靴'};

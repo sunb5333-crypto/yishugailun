@@ -16,3 +16,11 @@ test-rpg-v7-*.png
 assets/art/hero-*-v5-key.png
 assets/art/hero-*-v6-key.png
 assets/art/rpg-items-v1-key.png
+.loop-browser-profile/
+http-4175.*.log
+release-*.zip
+test-rpg-v8-*.png
+assets/art/*-source.png
+assets/art/*-key.png
+serve-local.py
+启动复习软件.cmd

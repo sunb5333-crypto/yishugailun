@@ -153,6 +153,8 @@ function render(){ensureDailyTask();const views={home,practice,fillPractice,cour
 function showView(view){if(view!==state.view)viewHistory.push(state.view);state.view=view;save();render();window.scrollTo({top:0,behavior:'smooth'})}
 function goBack(){state.view=viewHistory.pop()||'home';save();render();window.scrollTo({top:0,behavior:'smooth'})}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)showView(b.dataset.view)});
+const requestedView=new URLSearchParams(location.search).get('view');
+if(['home','practice','fillPractice','course','review','mistakes','settings'].includes(requestedView))state.view=requestedView;
 ensureDailyTask();save();render();
 
 // Cross-device progress sync is enabled after the Cloudflare Worker is deployed.

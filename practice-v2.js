@@ -1,11 +1,14 @@
 /* 三轮掩码练习：每天10个不同知识点，7道章节题加3道复习题。 */
-const PRACTICE_VERSION=5;
+const PRACTICE_VERSION=9;
 const COURSE_START_DATE='2026-07-27';
 const DAILY_LESSON_SIZE=10;
 const PRACTICE_ROUNDS=3;
 const DAILY_CURRENT_COUNT=7;
-const FREE_ORDER_IDS=new Set(['a2','a3','a4','a5','a6','a7','a8','a13','a15','a17','f1','f2','f3','m1']);
-const FREE_ORDER_PROMPT=/(包括|哪些|哪几|分类|分为|特征|功能|表现|要素|方面|核心作用)/;
+const FREE_ORDER_IDS=new Set(['a2','a3','a4','a5','a6','a7','a8','a12','a13','a15','a17','f1','f2','f3','m1','x01']);
+// Only genuine lists and classifications can be answered in any order.
+// A relational statement such as “在满足 A 的同时追求 B” changes its meaning when A/B swap.
+const FREE_ORDER_PROMPT=/(包括|哪些|哪几|分类|分为|要素|方面)/;
+const RELATIONSHIP_ANSWER=/((在)?[^。；，]{0,16}(同时|基础上|通过)[^。；，]{0,24}|不是[^。；，]{0,20}而是|既[^。；，]{0,20}(又|也)[^。；，]{0,20}|首先[^。；，]{0,20}(再|然后|最后)|前者[^。；，]{0,20}后者)/;
 const SEMANTIC_ORDER_PROMPT=/(关系|联系|区别|异同|统一|相互作用)/;
 const STRICT_ORDER_PROMPT=/(过程|阶段|先后|首先|其次|最后|不是.+而是|基础上|导致|因此|从.+到)/;
 const WEAK_FRAGMENT=/^(是|和|与|而|或|的|了|在|为|以|及|并|把|被|从|向|于|中|上|下)$/;
@@ -16,8 +19,11 @@ function sourceQuestionIdOf(item){
 function answerOrderPolicy(item){
   const sourceId=sourceQuestionIdOf(item),source=getQuestion(sourceId),prompt=String(source?.q||item?.q||'');
   const answer=String(item?.answerText||source?.answerText||'');
+  // These are verified concept lists: their members can be recalled in a different order.
+  if(FREE_ORDER_IDS.has(sourceId))return'free';
+  if(RELATIONSHIP_ANSWER.test(answer))return'strict';
   if(STRICT_ORDER_PROMPT.test(`${prompt}${answer}`))return'strict';
-  if(FREE_ORDER_IDS.has(sourceId)||FREE_ORDER_PROMPT.test(prompt))return'free';
+  if(FREE_ORDER_PROMPT.test(prompt))return'free';
   if(SEMANTIC_ORDER_PROMPT.test(prompt))return'semantic';
   return'strict';
 }
@@ -33,14 +39,16 @@ function sameAnswerMultiset(selected,expected){
   return true;
 }
 function maskAnswerCorrect(item,selected,expected){
-  return answerOrderPolicy(item)!=='strict'
+  // “semantic” means the sentence has a meaningful word order, not that order is optional.
+  // Only verified parallel/list questions use the free-order comparison.
+  return answerOrderPolicy(item)==='free'
     ?sameAnswerMultiset(selected,expected)
     :selected.length===expected.length&&selected.every((value,index)=>value===expected[index]);
 }
 function maskSelectionStatus(item,selected,expected,index){
   const value=selected[index];
   if(!value)return'wrong';
-  if(answerOrderPolicy(item)==='strict')return value===expected[index]?'correct':'wrong';
+  if(answerOrderPolicy(item)!=='free')return value===expected[index]?'correct':'wrong';
   const allowed=expected.filter(x=>x===value).length;
   const used=selected.slice(0,index+1).filter(x=>x===value).length;
   return used<=allowed?'correct':'wrong';
@@ -86,6 +94,8 @@ const SEMANTIC_TERMS=[
   '中轴对称','主次分明','礼制秩序','宗教仪式','神圣空间','高耸空间','彩色玻璃','佛舍利',
   '当代表达','现代材料','艺术体验','艺术构思','艺术表现','情感共鸣','精神净化','思想领悟'
 ];
+// Extra whole concepts which are safe to hide. Never fall back to arbitrary character slices.
+const SAFE_MASK_TERMS=['艺术门类','实用艺术','造型艺术','存在方式','艺术作品','艺术语言','建筑艺术','艺术鉴赏','艺术发展','艺术本质','艺术功能','社会功能','艺术形象','生活方式','空间形式','地域文化','现代建筑','传统民居','完整画面','山水意境','有机整体','宗教建筑','艺术规律','作品形象','个人经验','审美理解','艺术体验','艺术构思','艺术表现','文化连续性','回应时代','具体作品','安全','材料','结构','功能','造型','空间','文化表达','比例','尺度','围合','分隔','连接','引导','组织活动','行走体验','审美体验','二者统一','材料质感','结构受力','外观','风格','架高居住层','通风','隔潮','防虫','多雨环境','山石','水体','地形','骨架','倒影','流动感','艺术技术','生产结合','现代制造','新材料','新结构','扩大跨度','开窗','自由空间','开放形象','作品提供的形象','联想想象','个人审美理解','佛舍利','传入中国','建筑形式','绘画','雕塑','摄影','高耸','尖拱','情感体验','联系背景','自身经验','理解传统','顺应场地','现代主义','尖拱','神圣氛围'];
 
 function localDateString(date=new Date()){
   const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,'0'),d=String(date.getDate()).padStart(2,'0');
@@ -150,12 +160,25 @@ function exampleForQuestion(q){
 function lessonVariants(q){
   return[{kind:'考试重点',prompt:String(q.q||`请说明${q.section}`).replace(/^背诵[：:]\s*/,''),answerText:baseAnswer(q)}];
 }
+function studyModeForPractice(){return typeof currentStudyMode==='function'?currentStudyMode():'A'}
+function lessonShape(){
+  const mode=studyModeForPractice(),pending=(state.mistakes||[]).length;
+  return mode==='C'
+    ?{mode,size:7,rounds:3,currentCount:7}
+    :{mode,size:10,rounds:3,currentCount:mode==='A+B'?5:(pending>=40?5:DAILY_CURRENT_COUNT)};
+}
+function dueMasteredQuestionIds(date=localDateString()){
+  const now=parseLocalDate(date).getTime();
+  return(state.mastered||[]).filter(item=>item.nextReviewAt&&new Date(item.nextReviewAt).getTime()<=now).map(item=>item.id);
+}
 function buildDailyItems(chapter,date){
+  const shape=lessonShape();
   const current=uniqueLearningQuestions(seededShuffle(questionBank.filter(q=>questionChapter[q.id]===chapter.id),`${date}-${chapter.id}-current`));
-  const mistakeIds=(state.mistakes||[]).map(x=>x.id);
-  const reviews=uniqueLearningQuestions(seededShuffle(questionBank.filter(q=>mistakeIds.includes(q.id)&&!current.some(x=>x.id===q.id)),`${date}-mistakes`)).slice(0,3);
+  const mistakeIds=[...(state.mistakes||[]).map(x=>x.id),...dueMasteredQuestionIds(date)];
+  const reviewLimit=Math.max(0,shape.size-shape.currentCount);
+  const reviews=uniqueLearningQuestions(seededShuffle(questionBank.filter(q=>mistakeIds.includes(q.id)&&!current.some(x=>x.id===q.id)),`${date}-mistakes`)).slice(0,reviewLimit);
   const fallback=uniqueLearningQuestions(seededShuffle(questionBank.filter(q=>questionChapter[q.id]!==chapter.id&&!reviews.some(x=>x.id===q.id)),`${date}-reviews`));
-  const sources=uniqueLearningQuestions([...current.slice(0,DAILY_CURRENT_COUNT),...reviews,...current.slice(DAILY_CURRENT_COUNT),...fallback]).slice(0,DAILY_LESSON_SIZE);
+  const sources=uniqueLearningQuestions([...current.slice(0,shape.currentCount),...reviews,...current.slice(shape.currentCount),...fallback]).slice(0,shape.size);
   return sources.flatMap(q=>lessonVariants(q).map((v,index)=>({
     id:`${q.id}-d`,knowledgePointId:q.id,sourceQuestionId:q.id,type:'mask',chapter:q.chapter||chapter.title,
     section:q.section,q:v.prompt,answerText:v.answerText,explain:q.explain||baseAnswer(q),
@@ -177,10 +200,12 @@ function archivePreviousLesson(){
 }
 function createDailyLesson(date){
   const dayNumber=courseDayNumber(date),chapter=chapterForDay(dayNumber);
+  const shape=lessonShape();
   const items=buildDailyItems(chapter,date);
   const ids=items.map(x=>x.id);
   return{
     version:PRACTICE_VERSION,date,dayNumber,chapterId:chapter.id,chapterTitle:chapter.title,
+    mode:shape.mode,size:shape.size,rounds:shape.rounds,
     items,orders:{
       1:ids,
       2:seededShuffle(ids,`${date}-round-2`),
@@ -194,16 +219,16 @@ function migrateLessonProgress(previous,next){
   for(const item of next.items){
     const oldItem=previous.items.find(x=>(x.sourceQuestionId||x.knowledgePointId||String(x.id).split('-')[0])===item.sourceQuestionId);
     if(!oldItem)continue;
-    for(let round=1;round<=PRACTICE_ROUNDS;round++){
+    for(let round=1;round<=next.rounds;round++){
       const oldKey=`${round}:${oldItem.id}`,newKey=`${round}:${item.id}`;
       if(previous.answers?.[oldKey])next.answers[newKey]=previous.answers[oldKey];
       if(previous.selections?.[oldKey])next.selections[newKey]=previous.selections[oldKey];
     }
   }
-  for(let round=1;round<=PRACTICE_ROUNDS;round++){
+  for(let round=1;round<=next.rounds;round++){
     const order=next.orders[round],firstOpen=order.findIndex(id=>!next.answers[`${round}:${id}`]?.answered);
     if(firstOpen>=0){next.round=round;next.index=firstOpen;break}
-    if(round===PRACTICE_ROUNDS){next.round=round;next.index=DAILY_LESSON_SIZE-1}
+    if(round===next.rounds){next.round=round;next.index=next.size-1}
   }
   if(previous.done){next.done=true;next.completedAt=previous.completedAt||new Date().toISOString()}
   return next;
@@ -213,14 +238,15 @@ function reconcileLessonPolicies(lesson){
   for(const item of lesson.items||[]){
     const policy=answerOrderPolicy(item);
     if(item.orderPolicy!==policy){item.orderPolicy=policy;changed=true}
-    for(let round=1;round<=PRACTICE_ROUNDS;round++){
+    for(let round=1;round<=(lesson.rounds||PRACTICE_ROUNDS);round++){
       const result=lesson.answers?.[`${round}:${item.id}`];
       if(!result?.answered||!Array.isArray(result.userAnswer)||!Array.isArray(result.expected))continue;
       const regraded=maskAnswerCorrect(item,result.userAnswer,result.expected);
-      if(regraded&&!result.correct){
-        result.correct=true;result.regradedFromOrder=true;result.regradedAt=new Date().toISOString();changed=true;
+      if(regraded!==Boolean(result.correct)){
+        result.correct=regraded;result.regradedFromOrder=true;result.regradedAt=new Date().toISOString();changed=true;
         const joined=result.userAnswer.join('、');
-        state.mistakes=(state.mistakes||[]).filter(m=>!(m.id===item.sourceQuestionId&&m.userAnswer===joined));
+        if(regraded)state.mistakes=(state.mistakes||[]).filter(m=>!(m.id===item.sourceQuestionId&&m.userAnswer===joined));
+        else upsertMistake(getQuestion(item.sourceQuestionId)||item,joined);
       }
     }
   }
@@ -229,7 +255,8 @@ function reconcileLessonPolicies(lesson){
 function ensureDailyTask(){
   const date=localDateString();
   const current=state.dailyLesson;
-  if(!current||current.version!==PRACTICE_VERSION||current.date!==date){
+  const shape=lessonShape();
+  if(!current||current.version!==PRACTICE_VERSION||current.date!==date||current.mode!==shape.mode){
     if(current&&current.version!==PRACTICE_VERSION&&!state.legacyPracticeBackup){
       state.legacyPracticeBackup={savedAt:new Date().toISOString(),dailyLesson:JSON.parse(JSON.stringify(current))};
     }
@@ -246,8 +273,8 @@ function ensureDailyTask(){
     state.phaserGame=null;
     if(legacyDone){
       state.dailyLesson.done=true;
-      state.dailyLesson.round=3;
-      state.dailyLesson.index=DAILY_LESSON_SIZE-1;
+      state.dailyLesson.round=state.dailyLesson.rounds;
+      state.dailyLesson.index=state.dailyLesson.size-1;
       state.dailyLesson.completedAt=new Date().toISOString();
     }
   }
@@ -288,12 +315,12 @@ function validMaskFragment(text,existing=[]){
   });
 }
 function maskRanges(text,count,round,itemId){
-  const chars=[...text],usable=[];
-  chars.forEach((char,index)=>{if(/[\u4e00-\u9fffA-Za-z0-9]/.test(char))usable.push(index)});
-  const target=Math.max(2,round===1?3:round===2?5:7),ranges=[];
+  const chars=[...text],ranges=[];
+  const source=getQuestion(sourceQuestionIdOf({id:itemId}))||{};
   const semantic=[...new Set([
     ...SEMANTIC_TERMS,
-    ...questionBank.flatMap(q=>String(q.keywords||'').split(/[｜|、，；]/))
+    ...SAFE_MASK_TERMS,
+    ...String(source.keywords||'').split(/[｜|、，；]/)
   ].map(x=>x.trim()).filter(x=>x.length>=2&&text.includes(x)))]
     .map(term=>({start:text.indexOf(term),end:text.indexOf(term)+[...term].length,text:term}))
     .sort((a,b)=>b.text.length-a.text.length);
@@ -305,33 +332,7 @@ function maskRanges(text,count,round,itemId){
   }
   ranges.sort((a,b)=>a.start-b.start);
   if(ranges.length>=count)return ranges.slice(0,count).map((range,index)=>({...range,index}));
-  for(let n=0;n<count;n++){
-    if(ranges.length>=count)break;
-    const center=usable[Math.floor((n+1)*usable.length/(count+1))]??Math.floor(chars.length*(n+1)/(count+1));
-    let start=Math.max(0,center-Math.floor(target/2)),end=Math.min(chars.length,start+target);
-    while(start<end&&!/[\u4e00-\u9fffA-Za-z0-9]/.test(chars[start]))start++;
-    while(end>start&&!/[\u4e00-\u9fffA-Za-z0-9]/.test(chars[end-1]))end--;
-    for(const existing of ranges){
-      if(start<existing.end+1&&end>existing.start-1){
-        start=existing.end+1;end=Math.min(chars.length,start+target);
-      }
-    }
-    if(end-start<2){
-      start=Math.max(0,(usable[n]||0));end=Math.min(chars.length,start+Math.max(2,target-1));
-    }
-    const candidateText=chars.slice(start,end).join('');
-    if(!ranges.some(existing=>start<existing.end&&end>existing.start)&&validMaskFragment(candidateText,ranges.map(x=>x.text)))ranges.push({start,end,text:candidateText});
-  }
-  if(ranges.length<count){
-    for(let width=Math.min(10,Math.max(4,target));width>=2&&ranges.length<count;width--){
-      for(let start=0;start+width<=chars.length&&ranges.length<count;start++){
-        const end=start+width,textPart=chars.slice(start,end).join('');
-        if(ranges.some(existing=>start<existing.end&&end>existing.start)||!validMaskFragment(textPart,ranges.map(x=>x.text)))continue;
-        if(/^[，。；、：,.]|[，。；、：,.]$/.test(textPart))continue;
-        ranges.push({start,end,text:textPart});
-      }
-    }
-  }
+  // Quality wins over a fixed blank count: an incomplete or cut-off phrase is never a valid answer option.
   return ranges.sort((a,b)=>a.start-b.start).map((range,index)=>({...range,index}));
 }
 function confusablePhrase(phrase,round){
@@ -382,8 +383,7 @@ function submitMaskAnswer(){
   item.orderPolicy=answerOrderPolicy(item);
   const correct=maskAnswerCorrect(item,selected,expected);
   lesson.answers[key]={answered:true,correct,userAnswer:[...selected],expected,submittedAt:new Date().toISOString()};
-  // 并列型答案允许任意点击顺序；判对后按原句槽位回填，避免正确答案显示成不通顺的句子。
-  if(correct&&item.orderPolicy==='free')lesson.selections[key]=[...expected];
+  // Keep the learner's original fill order after submission so it can be compared with the standard answer.
   if(lesson.retryBackups)delete lesson.retryBackups[key];
   if(correct){state.xp+=10+lesson.round*5;markCorrect(getQuestion(item.sourceQuestionId)||item)}
   else upsertMistake(getQuestion(item.sourceQuestionId)||item,selected.join('、'));
@@ -400,10 +400,10 @@ function previousQuestion(){
 function nextQuestion(){
   const lesson=ensureDailyTask(),item=currentDailyItem();
   if(!answerFor(item.id)){notify('请先完成当前题目');return}
-  if(lesson.index<DAILY_LESSON_SIZE-1){
+  if(lesson.index<lesson.size-1){
     lesson.index++;state.dailyIndex=lesson.index;save();render();return;
   }
-  if(lesson.round<PRACTICE_ROUNDS){
+  if(lesson.round<lesson.rounds){
     lesson.round++;lesson.index=0;state.dailyIndex=0;lesson.roundIntro=true;save();render();return;
   }
   lesson.done=true;lesson.completedAt=new Date().toISOString();lesson.completionOpen=true;
@@ -413,6 +413,7 @@ function nextQuestion(){
 function closeRoundIntro(){ensureDailyTask().roundIntro=false;save();render()}
 function chooseAfterPractice(choice){
   const lesson=ensureDailyTask();lesson.completionOpen=false;
+  if(choice==='dictation'&&typeof openDailyDictation==='function'){openDailyDictation();return}
   if(choice==='game')enterDailyGame();else{state.view='home';save();render();window.scrollTo({top:0})}
 }
 function completedCountForRound(round){
@@ -420,7 +421,7 @@ function completedCountForRound(round){
   return lesson.items.filter(item=>{const key=answerKey(item.id,round);return lesson.answers[key]?.answered||lesson.retryBackups?.[key]?.answered}).length;
 }
 function totalPracticeDone(){
-  let total=0;for(let round=1;round<=PRACTICE_ROUNDS;round++)total+=completedCountForRound(round);
+  const lesson=ensureDailyTask();let total=0;for(let round=1;round<=lesson.rounds;round++)total+=completedCountForRound(round);
   return total;
 }
 function maskedSentence(item,plan,selected,result){
@@ -441,12 +442,13 @@ function roundIntroMarkup(lesson){
     2:'第二轮题序已经打乱，每题遮住3个更长的部分。',
     3:'第三轮再次打乱题序，每题遮住4个词、短语或句段。完成后解锁今日关卡。'
   };
-  return`<div class="practice-overlay"><div class="practice-dialog"><span>ROUND ${lesson.round} / 3</span><h2>开始第${lesson.round}轮</h2><p>${descriptions[lesson.round]}</p><button class="primary-btn" onclick="closeRoundIntro()">开始这一轮 →</button></div></div>`;
+  return`<div class="practice-overlay"><div class="practice-dialog"><span>ROUND ${lesson.round} / ${lesson.rounds}</span><h2>开始第${lesson.round}轮</h2><p>${descriptions[lesson.round]}</p><button class="primary-btn" onclick="closeRoundIntro()">开始这一轮 →</button></div></div>`;
 }
 function completionMarkup(lesson){
   if(!lesson.completionOpen)return'';
   const correct=Object.values(lesson.answers).filter(x=>x.correct).length;
-  return`<div class="practice-overlay"><div class="practice-dialog complete"><div class="completion-mark">✓</div><span>30 次提取练习完成</span><h2>今日游戏关卡已解锁</h2><p>今天的10条答案已经变成关卡中的答案碎片。三轮共答对 ${correct}/30 次。</p><div class="completion-actions"><button class="primary-btn" onclick="chooseAfterPractice('game')">进入今日关卡 →</button><button class="text-btn" onclick="chooseAfterPractice('home')">稍后再去</button></div></div></div>`;
+  const total=lesson.size*lesson.rounds;
+  return`<div class="practice-overlay"><div class="practice-dialog complete"><div class="completion-mark">✓</div><span>${total} 次提取练习完成</span><h2>基础训练已完成</h2><p>今天的${lesson.size}条答案已经完成提取练习，共答对 ${correct}/${total} 次。接下来用默写确认自己真的能写出来。</p><div class="completion-actions"><button class="primary-btn" onclick="chooseAfterPractice('dictation')">进入今日默写 →</button><button class="text-btn" onclick="chooseAfterPractice('home')">先返回今日计划</button></div></div></div>`;
 }
 function practice(){
   const lesson=ensureDailyTask(),item=currentDailyItem(),round=lesson.round,index=lesson.index+1;
@@ -457,17 +459,17 @@ function practice(){
   }).join('');
   const explanation=result?`<aside class="practice-answer ${result.correct?'is-correct':'is-wrong'}">
     <div class="answer-result"><b>${result.correct?'✓':'×'}</b><div><strong>${result.correct?'回答正确':'回答错误'}</strong><span>本题已自动保存</span></div></div>
-    <section><span>完整答案</span><p>${escapeHtml(item.answerText)}</p></section>
+    <section class="${result.correct?'':'answer-correction-glow'}"><span>完整答案</span><p>${escapeHtml(item.answerText)}</p></section>
     <section class="example-card"><span>用例子理解</span><p>${escapeHtml(item.example)}</p></section>
     <section class="why-card"><span>为什么这样答</span><p>${escapeHtml(item.explain)}</p></section>
   </aside>`:`<aside class="practice-answer is-empty"><div class="empty-answer-art">${round+1}</div><span>答题后，这里显示</span><h3>完整答案与具体例子</h3><p>右侧区域独立显示，不会把左侧题目向下撑开。</p></aside>`;
-  const total=totalPracticeDone(),percent=Math.round(total/(DAILY_LESSON_SIZE*PRACTICE_ROUNDS)*100);
-  return shell(`今天的10题 · 第${round}轮`,`MASKED PRACTICE · ROUND ${round} / 3`,`
+  const target=lesson.size*lesson.rounds,total=totalPracticeDone(),percent=Math.round(total/target*100);
+  return shell(`今天的${lesson.size}题 · 第${round}轮`,`MASKED PRACTICE · ROUND ${round} / ${lesson.rounds}` ,`
     <div class="practice-v2-meta"><div><span>${lesson.chapterTitle}</span><strong>${item.section} · ${item.variant}</strong></div><div class="round-pills"><i class="${round>=1?'active':''}">1</i><i class="${round>=2?'active':''}">2</i><i class="${round>=3?'active':''}">3</i></div></div>
-    <div class="practice-v2-progress"><span>本轮 ${index}/10</span><div><i style="width:${percent}%"></i></div><span>总进度 ${total}/30</span></div>
+    <div class="practice-v2-progress"><span>本轮 ${index}/${lesson.size}</span><div><i style="width:${percent}%"></i></div><span>总进度 ${total}/${target}</span></div>
     <div class="practice-v2-layout">
       <section class="practice-question">
-        <div class="question-number"><span>${String(index).padStart(2,'0')}</span><small>本轮遮住 ${round+1} 个部分</small></div>
+        <div class="question-number"><span>${String(index).padStart(2,'0')}</span><small>本轮遮住 ${plan.ranges.length} 个完整概念</small></div>
         <h2>${escapeHtml(item.q)}</h2>
         <div class="masked-statement">${maskedSentence(item,plan,selected,result)}</div>
         <div class="option-label">从相似选项中选择 · ${answerOrderPolicy(item)==='free'?'并列答案顺序不限，选对词即可':'本题按语意顺序作答'}</div>
@@ -475,7 +477,7 @@ function practice(){
         <div class="practice-v2-actions">
           <button class="text-btn" onclick="previousQuestion()" ${lesson.index===0?'disabled':''}>← 上一题</button>
           ${result?'<button class="text-btn" onclick="retryCurrent()">重新作答</button>':'<button class="primary-btn" onclick="submitMaskAnswer()">提交答案</button>'}
-          <button class="primary-btn" onclick="nextQuestion()" ${result?'':'disabled'}>${lesson.index===DAILY_LESSON_SIZE-1?(round===3?'完成三轮':'进入下一轮'):'下一题'} →</button>
+          <button class="primary-btn" onclick="nextQuestion()" ${result?'':'disabled'}>${lesson.index===lesson.size-1?(round===lesson.rounds?'完成基础训练':'进入下一轮'):'下一题'} →</button>
         </div>
       </section>
       ${explanation}
